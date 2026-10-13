@@ -73,6 +73,12 @@ doesn't flash anything to the device.
 | Press `Power`      | Sleep / wake                           |
 | Hold `Power`       | Shut down, or exit to the stock OS     |
 
+**Cart art:** in **HOME → Wi-Fi**, connect to a network, then choose **GET CART ART**. Left / Right
+picks box art, title screens or in-game shots. Games with no label get one from the libretro
+thumbnail collection, matched by file name; labels you already have are never replaced.
+`Slot/Logs/cart-art.txt` lists each game and what it got. If a game isn't found, renaming
+the ROM to its No-Intro name, for example `Pokemon - Emerald Version (USA, Europe).gba`, helps.
+
 **Auto-sleep:** the Brick sleeps after 5 minutes idle in menus or 15 minutes in a game.
 To turn this off, create an empty file named `Slot/DISABLE_AUTO_SLEEP`.
 

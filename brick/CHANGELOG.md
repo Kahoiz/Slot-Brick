@@ -1,6 +1,8 @@
 # Changelog — Slot. for TrimUI Brick
 
 ## Unreleased
+- Wi-Fi > GET CART ART downloads box art, title screens or in-game shots for games with no
+  label, from the libretro thumbnail collection. Existing labels are never replaced.
 - Fixed Wi-Fi never turning on: the firmware's wifi_init.sh needs an rfkill.elf the Brick
   lacks, so the radio stayed blocked. Slot now unblocks it itself and checks the result.
 - Wi-Fi errors always leave Slot/Logs/wifi.log, and B really cancels a stuck toggle.

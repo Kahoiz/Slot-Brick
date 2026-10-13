@@ -266,6 +266,8 @@ pub struct App {
     wifi_power: Option<Action>,
     phase: Phase,
     shelves: Vec<(Platform, Shelf)>,
+    /// Faces of carts whose label changed, for CartFaces to recycle and rebuild.
+    stale_faces: Vec<TexId>,
     shelf_at: usize,
     play_held: Option<Millis>,
     refusal: Option<Refusal>,
@@ -401,6 +403,7 @@ impl App {
             card_check_at: 0,
             phase: Phase::Shelf,
             shelves,
+            stale_faces: Vec::new(),
             shelf_at,
             play_held: None,
             refusal: None,
@@ -819,9 +822,22 @@ impl App {
         self.shelves.get_mut(shelf)?.1.set_face(index, tex)
     }
 
+    /// A label fetched while running: the cart's face is dropped so it is rebuilt with it.
+    pub fn adopt_label(&mut self, platform: Platform, stem: &str, label: std::path::PathBuf) {
+        for (p, shelf) in &mut self.shelves {
+            if *p != platform {
+                continue;
+            }
+            if let Some(i) = shelf.carts.iter().position(|c| c.stem == stem) {
+                shelf.carts[i].label = Some(label.clone());
+                self.stale_faces.extend(shelf.take_face(i));
+            }
+        }
+    }
+
     pub fn shed_faces(&mut self) -> Vec<TexId> {
         let neighbours = self.neighbour_shelves();
-        let mut shed = Vec::new();
+        let mut shed = std::mem::take(&mut self.stale_faces);
         for (at, (_, shelf)) in self.shelves.iter_mut().enumerate() {
             let keep = if at == self.shelf_at {
                 shelf.around(FACE_KEEP)
@@ -1858,6 +1874,7 @@ impl App {
         #[cfg(feature = "brick")]
         {
             if let Some(wifi)=&mut self.wifi {wifi.poll();}
+            for f in self.wifi.as_mut().map(|w|w.take_fetched()).unwrap_or_default() {self.adopt_label(f.platform,&f.stem,f.label);}
             if self.wifi.as_ref().map(|w|!w.busy()).unwrap_or(true) {
                 if let Some(action)=self.wifi_power.take(){self.apply(action);}
             }

@@ -1,7 +1,9 @@
 //! Brick Wi-Fi settings. Uses the firmware supplicant; no shell interpolation of credentials.
 use std::{fs,os::unix::{net::UnixDatagram,fs::PermissionsExt},path::{Path,PathBuf},process::{Command,Stdio},sync::{mpsc,Arc,atomic::{AtomicBool,AtomicU64,Ordering}},thread,time::{Duration,Instant}};
 use slot_input::{Action,Btn};
+use slot_store::ThumbKind;
 use slot_ui::{TexId,UndoFace};
+use crate::cart_art::{ArtJob,Fetched,Progress};
 type Result<T> = std::result::Result<T,String>;
 static SERIAL:AtomicU64=AtomicU64::new(0);
 #[derive(Clone,Copy,PartialEq,Eq,Debug)]
@@ -138,19 +140,45 @@ fn run(job:Job,cancel:&AtomicBool)->Result<Reply>{
 struct Worker{rx:mpsc::Receiver<Result<Reply>>,cancel:Arc<AtomicBool>}
 struct Keyboard{network:Network,password:String,key:usize,page:usize}
 const KEYS:[&str;3]=["abcdefghijklmnopqrstuvwxyz0123456789    ","ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789    ","!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~        "];
-pub struct WifiMenu{worker:Option<Worker>,pub face:Option<TexId>,pub dirty:bool,on:bool,status:String,networks:Vec<Network>,row:usize,keyboard:Option<Keyboard>,refreshed:Instant}
+/// Rows above the network list: Wi-Fi on/off, scan, disconnect, cart art.
+const FIXED:usize=4;
+pub struct WifiMenu{worker:Option<Worker>,pub face:Option<TexId>,pub dirty:bool,on:bool,status:String,networks:Vec<Network>,row:usize,keyboard:Option<Keyboard>,refreshed:Instant,art:Option<ArtJob>,art_kind:ThumbKind,fetched:Vec<Fetched>}
 impl WifiMenu{
-    pub fn new()->Self{let mut s=Self{worker:None,face:None,dirty:true,on:false,status:"Checking Wi-Fi...".into(),networks:Vec::new(),row:0,keyboard:None,refreshed:Instant::now()};s.start(Job::Status);s}
-    pub fn busy(&self)->bool{self.worker.is_some()}
-    pub fn cancel(&mut self){if let Some(w)=&self.worker{w.cancel.store(true,Ordering::Relaxed);self.status="Cancelling...".into();self.dirty=true;}}
+    pub fn new()->Self{let mut s=Self{worker:None,face:None,dirty:true,on:false,status:"Checking Wi-Fi...".into(),networks:Vec::new(),row:0,keyboard:None,refreshed:Instant::now(),art:None,art_kind:ThumbKind::Boxart,fetched:Vec::new()};s.start(Job::Status);s}
+    pub fn busy(&self)->bool{self.worker.is_some() || self.art.is_some()}
+    pub fn cancel(&mut self){
+        if let Some(w)=&self.worker{w.cancel.store(true,Ordering::Relaxed);}
+        if let Some(a)=&self.art{a.cancel();}
+        if self.busy(){self.status="Cancelling...".into();self.dirty=true;}
+    }
+    /// Labels saved since the last call, for the library to show straight away.
+    pub fn take_fetched(&mut self)->Vec<Fetched>{std::mem::take(&mut self.fetched)}
+    fn poll_art(&mut self){
+        let Some(job)=&self.art else{return};
+        loop{match job.try_recv(){
+            Ok(Progress::Step{done,total,name})=>{self.status=format!("Cart art {}/{total}: {name}",done+1);self.dirty=true;}
+            Ok(Progress::Got(f))=>self.fetched.push(f),
+            Ok(Progress::Done(r))=>{
+                self.status=match r{
+                    Ok(s) if s.found+s.missing+s.failed==0=>"Every game already has a label".into(),
+                    Ok(s)=>format!("Cart art: {} added, {} not found{}",s.found,s.missing,if s.failed>0{format!(", {} failed",s.failed)}else{String::new()}),
+                    Err(e)=>e,
+                };
+                self.art=None;self.dirty=true;self.refreshed=Instant::now();return;
+            }
+            Err(mpsc::TryRecvError::Empty)=>return,
+            Err(mpsc::TryRecvError::Disconnected)=>{self.art=None;self.status="Cart art stopped".into();self.dirty=true;return}
+        }}
+    }
     fn start(&mut self,job:Job){
         if self.busy(){return}let(tx,rx)=mpsc::channel();let cancel=Arc::new(AtomicBool::new(false));let token=cancel.clone();
         if !matches!(job,Job::Status){self.status=match job{Job::Scan=>"Scanning...",Job::Power(true)=>"Turning Wi-Fi on...",Job::Power(false)=>"Turning Wi-Fi off...",Job::Connect(..)=>"Connecting...",Job::Disconnect=>"Disconnecting...",_=>unreachable!()}.into();}
         thread::spawn(move||{let _=tx.send(run(job,&token));});self.worker=Some(Worker{rx,cancel});self.dirty=true;
     }
     pub fn poll(&mut self){
+        self.poll_art();
         if let Some(w)=&self.worker{match w.rx.try_recv(){
-            Ok(r)=>{self.worker=None;match r{Ok(r)=>{self.on=r.on;self.status=r.status;if let Some(n)=r.networks{self.networks=n;}},Err(e)=>self.status=e}self.row=self.row.min(self.networks.len()+2);self.dirty=true;self.refreshed=Instant::now();},
+            Ok(r)=>{self.worker=None;match r{Ok(r)=>{self.on=r.on;self.status=r.status;if let Some(n)=r.networks{self.networks=n;}},Err(e)=>self.status=e}self.row=self.row.min(self.networks.len()+FIXED-1);self.dirty=true;self.refreshed=Instant::now();},
             Err(mpsc::TryRecvError::Disconnected)=>{self.worker=None;self.status="Wi-Fi worker stopped".into();self.dirty=true;self.refreshed=Instant::now();},_=>{}
         }}
         // Poll only while this menu is open; scanning is always explicit.
@@ -172,14 +200,24 @@ impl WifiMenu{
         }
         match a{
             Action::GbaDown(Btn::B)=>return true,
-            Action::GbaDown(Btn::Up)=>self.row=(self.row+self.networks.len()+2)%(self.networks.len()+3),
-            Action::GbaDown(Btn::Down)=>self.row=(self.row+1)%(self.networks.len()+3),
-            Action::GbaDown(Btn::A)|Action::Insert=>match self.row{0=>self.start(Job::Power(!self.on)),1=>self.start(Job::Scan),2=>self.start(Job::Disconnect),_=>self.choose(false)},
+            Action::GbaDown(Btn::Up)=>self.row=(self.row+self.networks.len()+FIXED-1)%(self.networks.len()+FIXED),
+            Action::GbaDown(Btn::Down)=>self.row=(self.row+1)%(self.networks.len()+FIXED),
+            Action::GbaDown(Btn::Left)|Action::ShelfLeft|Action::GbaDown(Btn::Right)|Action::ShelfRight if self.row==3=>{
+                let n=ThumbKind::ALL.len();let at=ThumbKind::ALL.iter().position(|k|*k==self.art_kind).unwrap_or(0);
+                let right=matches!(a,Action::GbaDown(Btn::Right)|Action::ShelfRight);
+                self.art_kind=ThumbKind::ALL[(at+if right{1}else{n-1})%n];
+            }
+            Action::GbaDown(Btn::A)|Action::Insert=>match self.row{0=>self.start(Job::Power(!self.on)),1=>self.start(Job::Scan),2=>self.start(Job::Disconnect),3=>self.start_art(),_=>self.choose(false)},
             Action::GbaDown(Btn::X)=>self.choose(true),_=>{}
         }false
     }
+    fn start_art(&mut self){
+        if !self.on{self.status="Turn Wi-Fi on and connect first".into();return}
+        self.status="Cart art: fetching game list...".into();
+        self.art=Some(ArtJob::start(card_root(),self.art_kind));
+    }
     fn choose(&mut self,edit:bool){
-        let Some(n)=self.row.checked_sub(3).and_then(|i|self.networks.get(i)).cloned()else{return};
+        let Some(n)=self.row.checked_sub(FIXED).and_then(|i|self.networks.get(i)).cloned()else{return};
         if n.security==Security::Unsupported{self.status="Use an open or WPA/WPA2 personal network".into();return}
         if n.security==Security::Personal && (edit || n.saved.is_none()){self.status="Password is case sensitive".into();self.keyboard=Some(Keyboard{network:n,password:String::new(),key:0,page:0});}else{self.start(Job::Connect(n,None));}
     }
@@ -191,9 +229,9 @@ impl WifiMenu{
             p.text("A TYPE    X DELETE    Y abc / ABC / #!?",24,392,592,18.0);p.text("B BACK                    START CONNECT",24,430,592,20.0);
         }else{
             let first=if self.row<7{0}else{self.row-6};
-            for (line,row) in (first..(self.networks.len()+3).min(first+7)).enumerate(){let y=110+line*41;if row==self.row{p.rect(0,y,640,38,slot_ui::edge());}
-                let label=match row{0=>format!("WI-FI                          {}",if self.on{"ON"}else{"OFF"}),1=>"SCAN NETWORKS".into(),2=>"DISCONNECT".into(),_=>{let n=&self.networks[row-3];format!("{}  {}  {} dBm",name(&n.ssid),if n.saved.is_some(){"[SAVED]"}else if n.security==Security::Open{"[OPEN]"}else{"[LOCK]"},n.signal)}};p.text(&label,32,y+1,576,23.0);
-            }p.text(if self.busy(){"B CANCEL"}else{"B BACK    A SELECT    X EDIT PASSWORD"},24,430,592,20.0);
+            for (line,row) in (first..(self.networks.len()+FIXED).min(first+7)).enumerate(){let y=110+line*41;if row==self.row{p.rect(0,y,640,38,slot_ui::edge());}
+                let label=match row{0=>format!("WI-FI                          {}",if self.on{"ON"}else{"OFF"}),1=>"SCAN NETWORKS".into(),2=>"DISCONNECT".into(),3=>format!("GET CART ART          < {} >",self.art_kind.label()),_=>{let n=&self.networks[row-FIXED];format!("{}  {}  {} dBm",name(&n.ssid),if n.saved.is_some(){"[SAVED]"}else if n.security==Security::Open{"[OPEN]"}else{"[LOCK]"},n.signal)}};p.text(&label,32,y+1,576,23.0);
+            }p.text(if self.busy(){"B CANCEL"}else if self.row==3{"B BACK    A GET ART    LEFT/RIGHT STYLE"}else{"B BACK    A SELECT    X EDIT PASSWORD"},24,430,592,20.0);
         }UndoFace{rgba:p.rgba,w:640,h:480}
     }
 }
@@ -226,5 +264,5 @@ impl Painter{
     #[test]fn cancelled_connect_removes_unsaved_profile(){let m=Mock::new(vec![("LIST_NETWORKS",Ok("header")),("ADD_NETWORK",Ok("8")),("SET_NETWORK 8 ssid 54657374",Ok("OK")),("SET_NETWORK 8 key_mgmt WPA-PSK",Ok("OK")),("SET_NETWORK 8 psk \"password\"",Ok("OK")),("SELECT_NETWORK 8",Ok("OK")),("REMOVE_NETWORK 8",Ok("OK")),("DISCONNECT",Ok("OK"))]);assert_eq!(connect(&m,&network(),Some("password".into()),&AtomicBool::new(true)).unwrap_err(),"Cancelled");m.done();}
     #[test]fn successful_connect_saves_only_after_association(){let m=Mock::new(vec![("LIST_NETWORKS",Ok("header")),("ADD_NETWORK",Ok("8")),("SET_NETWORK 8 ssid 54657374",Ok("OK")),("SET_NETWORK 8 key_mgmt WPA-PSK",Ok("OK")),("SET_NETWORK 8 psk \"password\"",Ok("OK")),("SELECT_NETWORK 8",Ok("OK")),("STATUS",Ok("id=8\nwpa_state=COMPLETED\nip_address=192.168.1.2")),("SAVE_CONFIG",Ok("OK"))]);assert_eq!(connect(&m,&network(),Some("password".into()),&AtomicBool::new(false)).unwrap(),"Connected; network saved");m.done();}
     #[test]#[ignore="Requires a Linux runtime allowing AF_UNIX datagram sockets"]fn socket_roundtrip(){let dir=tempfile::tempdir().unwrap();let remote=dir.path().join("server");let server=UnixDatagram::bind(&remote).unwrap();let t=thread::spawn(move||{let mut b=[0;64];let(n,peer)=server.recv_from(&mut b).unwrap();assert_eq!(&b[..n],b"PING");server.send_to(b"PONG\n",peer.as_pathname().unwrap()).unwrap();});let c=Control::at(&remote).unwrap();let local=c.local.clone();assert_eq!(fs::metadata(&local).unwrap().permissions().mode()&0o777,0o600);assert_eq!(c.command("PING").unwrap(),"PONG");drop(c);assert!(!local.exists());t.join().unwrap();}
-    #[test]fn render_fixture(){let s=WifiMenu{worker:None,face:None,dirty:true,on:true,status:"Password is case sensitive".into(),networks:Vec::new(),row:0,keyboard:Some(Keyboard{network:network(),password:"Test".into(),key:0,page:0}),refreshed:Instant::now()};let f=s.render();assert_eq!(f.rgba.len(),640*480*4);if let Ok(path)=std::env::var("SLOT_WIFI_PREVIEW"){let mut e=png::Encoder::new(fs::File::create(path).unwrap(),640,480);e.set_color(png::ColorType::Rgba);e.set_depth(png::BitDepth::Eight);e.write_header().unwrap().write_image_data(&f.rgba).unwrap();}}
+    #[test]fn render_fixture(){let s=WifiMenu{worker:None,face:None,dirty:true,on:true,status:"Password is case sensitive".into(),networks:Vec::new(),row:0,keyboard:Some(Keyboard{network:network(),password:"Test".into(),key:0,page:0}),refreshed:Instant::now(),art:None,art_kind:ThumbKind::Boxart,fetched:Vec::new()};let f=s.render();assert_eq!(f.rgba.len(),640*480*4);if let Ok(path)=std::env::var("SLOT_WIFI_PREVIEW"){let mut e=png::Encoder::new(fs::File::create(path).unwrap(),640,480);e.set_color(png::ColorType::Rgba);e.set_depth(png::BitDepth::Eight);e.write_header().unwrap().write_image_data(&f.rgba).unwrap();}}
 }
