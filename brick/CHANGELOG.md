@@ -1,5 +1,10 @@
 # Changelog — Slot. for TrimUI Brick
 
+## Unreleased
+- Fixed Wi-Fi never turning on: the firmware's wifi_init.sh needs an rfkill.elf the Brick
+  lacks, so the radio stayed blocked. Slot now unblocks it itself and checks the result.
+- Wi-Fi errors always leave Slot/Logs/wifi.log, and B really cancels a stuck toggle.
+
 ## v0.23
 - Settings > About credits the port to LordNordyx.
 - Short app names in the stock Apps list: Slot, Logo, Check and Stock, each with its own icon.

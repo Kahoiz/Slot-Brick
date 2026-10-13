@@ -5,10 +5,10 @@ PATH=/usr/trimui/bin:/usr/sbin:/sbin:/usr/bin:/bin
 ROOT=${SLOT_ROOT:-/mnt/SDCARD/Slot}
 RUN=${SLOT_LINK_RUN:-/tmp/slot-brick-link}
 ETC=${SLOT_LINK_ETC:-/etc}
-# Brick: helper ships on the SD card; other firmware has $ETC/wifi/wifi_init.sh.
+# Slot's own helper first: Brick firmware's wifi_init.sh cannot unblock the radio.
 CARD_HELPER="$ROOT/System/brick_wifi.sh"
 HELPER=${SLOT_WIFI_HELPER:-$CARD_HELPER}
-[ -f "$ETC/wifi/wifi_init.sh" ] && [ -z "${SLOT_WIFI_HELPER:-}" ] && HELPER="$ETC/wifi/wifi_init.sh"
+[ ! -f "$CARD_HELPER" ] && [ -f "$ETC/wifi/wifi_init.sh" ] && [ -z "${SLOT_WIFI_HELPER:-}" ] && HELPER="$ETC/wifi/wifi_init.sh"
 mkdir -p "$ROOT/Logs"
 LOG="$ROOT/Logs/multiplayer.log"
 [ ! -f "$LOG" ] || [ "$(wc -c < "$LOG")" -le 131072 ] || mv -f "$LOG" "$LOG.previous"

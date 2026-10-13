@@ -62,19 +62,29 @@ impl Supplicant for Control{
 }
 fn field<'a>(s:&'a str,key:&str)->Option<&'a str>{s.lines().find_map(|s|s.strip_prefix(key).and_then(|s|s.strip_prefix('=')))}
 fn pause(cancel:&AtomicBool,ms:u64)->Result<()>{for _ in 0..(ms+99)/100{if cancel.load(Ordering::Relaxed){return Err("Cancelled".into())}thread::sleep(Duration::from_millis(100));}Ok(())}
-/// Stock Brick firmware ships no /etc/wifi/wifi_init.sh, so slot carries its own
-/// System/brick_wifi.sh. A firmware helper, where one exists, still wins.
+/// Slot's own System/brick_wifi.sh always wins: it writes Logs/wifi.log and tries the
+/// firmware's /etc/wifi/wifi_init.sh itself, falling back to its own start when that fails.
+/// The firmware helper is only run directly when the card copy is missing.
 fn helper(firmware:&Path,root:&Path)->Option<PathBuf>{
-    if firmware.is_file(){return Some(firmware.into())}
-    let own=root.join("System/brick_wifi.sh");own.is_file().then_some(own)
+    let own=root.join("System/brick_wifi.sh");if own.is_file(){return Some(own)}
+    firmware.is_file().then(||firmware.into())
 }
-fn service(on:bool)->Result<()>{
-    let root=PathBuf::from(std::env::var_os("SLOT_ROOT").unwrap_or_else(||"/mnt/SDCARD/Slot".into()));
+fn card_root()->PathBuf{PathBuf::from(std::env::var_os("SLOT_ROOT").unwrap_or_else(||"/mnt/SDCARD/Slot".into()))}
+fn service(on:bool,cancel:&AtomicBool)->Result<()>{
+    let root=card_root();
     let Some(script)=helper(Path::new("/etc/wifi/wifi_init.sh"),&root) else {return Err("Wi-Fi helper missing: System/brick_wifi.sh".into())};
-    let mut child=Command::new("/bin/sh").arg(&script).arg(if on{"start"}else{"stop"}).env("SLOT_ROOT",&root).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|_|"Cannot start Wi-Fi helper")?;
+    let verb=if on{"start"}else{"stop"};
+    // Inherit slot's stdout/stderr (Logs/slot.log): brick_wifi.sh moves itself to Logs/wifi.log,
+    // and anything else, such as a firmware helper run directly, still leaves a trace.
+    eprintln!("wifi: {} {verb}",script.display());
+    let mut child=Command::new("/bin/sh").arg(&script).arg(verb).env("SLOT_ROOT",&root).stdin(Stdio::null()).spawn().map_err(|_|"Cannot start Wi-Fi helper")?;
     let start=Instant::now();loop{
-        if let Some(status)=child.try_wait().map_err(|_|"Cannot check Wi-Fi helper")?{return if status.success(){Ok(())}else{Err("Could not switch Wi-Fi; see Logs/wifi.log".into())}}
-        if start.elapsed()>Duration::from_secs(15){let _=child.kill();let _=child.wait();return Err("Wi-Fi helper timed out; see Logs/wifi.log".into())}
+        if let Some(status)=child.try_wait().map_err(|_|"Cannot check Wi-Fi helper")?{
+            eprintln!("wifi: helper {verb} ended: {status}");
+            return if status.success(){Ok(())}else{Err("Could not switch Wi-Fi; see Slot/Logs/wifi.log".into())}
+        }
+        if cancel.load(Ordering::Relaxed){let _=child.kill();let _=child.wait();eprintln!("wifi: helper {verb} cancelled");return Err("Cancelled".into())}
+        if start.elapsed()>Duration::from_secs(30){let _=child.kill();let _=child.wait();eprintln!("wifi: helper {verb} timed out");return Err("Wi-Fi helper timed out; see Slot/Logs/wifi.log".into())}
         thread::sleep(Duration::from_millis(100));
     }
 }
@@ -110,7 +120,7 @@ enum Job{Status,Scan,Power(bool),Connect(Network,Option<String>),Disconnect}
 struct Reply{on:bool,status:String,networks:Option<Vec<Network>>}
 fn run(job:Job,cancel:&AtomicBool)->Result<Reply>{
     if let Job::Power(on)=job{
-        service(on)?;
+        service(on,cancel)?;
         if !on{return Ok(Reply{on:false,status:"Wi-Fi off".into(),networks:Some(Vec::new())})}
         for _ in 0..20{if Control::open().is_ok(){break}pause(cancel,250)?;}
         return run(Job::Scan,cancel)
@@ -204,12 +214,12 @@ impl Painter{
     fn network()->Network{Network{ssid:b"Test".to_vec(),signal:-40,security:Security::Personal,saved:None}}
     #[test]fn parse_scans(){let n=scan_rows("header\na\t2412\t-80\t[WPA2-PSK-CCMP]\tMy\\x20WiFi\nb\t2412\t-40\t[WPA2-PSK-CCMP]\tMy WiFi\nc\t2412\t-30\t[ESS]\tCafe\nd\t2412\t-20\t[WPA2-EAP-CCMP]\tWork\n","header\n7\tMy WiFi\tany\t[CURRENT]\n");assert_eq!(n.len(),3);assert_eq!(n[0].security,Security::Unsupported);assert_eq!(n[2].signal,-40);assert_eq!(n[2].saved,Some(7));}
     #[test]fn password_bytes(){assert!(psk("short").is_err());assert!(psk("1234567\n").is_err());assert_eq!(psk("Abc\"\\123").unwrap(),"\"Abc\"\\123\"");assert_eq!(psk(&"a".repeat(64)).unwrap(),"a".repeat(64));assert!(psk(&"z".repeat(64)).is_err());}
-    #[test]fn helper_prefers_firmware_then_card(){
+    #[test]fn helper_prefers_card_then_firmware(){
         let d=tempfile::tempdir().unwrap();let fw=d.path().join("wifi_init.sh");let root=d.path().join("Slot");
         assert_eq!(helper(&fw,&root),None);
+        fs::write(&fw,"").unwrap();assert_eq!(helper(&fw,&root),Some(fw.clone()));
         fs::create_dir_all(root.join("System")).unwrap();fs::write(root.join("System/brick_wifi.sh"),"").unwrap();
         assert_eq!(helper(&fw,&root),Some(root.join("System/brick_wifi.sh")));
-        fs::write(&fw,"").unwrap();assert_eq!(helper(&fw,&root),Some(fw.clone()));
     }
     #[test]fn all_keys(){for s in KEYS{assert_eq!(s.len(),40)}for b in 32..=126{assert!(KEYS.iter().any(|s|s.as_bytes().contains(&b)),"{b}");}}
     #[test]fn failed_setup_restores_previous_connection(){let m=Mock::new(vec![("LIST_NETWORKS",Ok("header\n3\tOld\tany\t[CURRENT]\n4\tOther\tany\t[DISABLED]")),("ADD_NETWORK",Ok("8")),("SET_NETWORK 8 ssid 54657374",Err("rejected".into())),("REMOVE_NETWORK 8",Ok("OK")),("SELECT_NETWORK 3",Ok("OK")),("ENABLE_NETWORK 3",Ok("OK")),("DISABLE_NETWORK 4",Ok("OK"))]);assert!(connect(&m,&network(),Some("password".into()),&AtomicBool::new(false)).is_err());m.done();}
