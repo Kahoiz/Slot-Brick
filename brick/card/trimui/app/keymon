@@ -1,0 +1,3 @@
+#!/bin/sh
+# No Anbernic/NextUI key daemon is installed by this bootstrap.
+exit 0

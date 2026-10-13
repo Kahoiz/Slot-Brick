@@ -1,0 +1,9 @@
+# Scripts run on the Brick: never convert to Windows line endings.
+*.sh text eol=lf
+brick/card/trimui/app/MainUI text eol=lf
+brick/card/trimui/app/keymon text eol=lf
+*.so binary
+*.png binary
+*.bmp binary
+*.ttf binary
+*.tar.gz binary
