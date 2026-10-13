@@ -89,7 +89,7 @@ Insert the SD card into your TrimUI Brick and power on the device. Slot. should 
 
 ## Controls
 
-The three small buttons below the screen are **HOME** (left, labelled Menu), **SELECT** (middle), and **START** (right).
+The three small buttons on the bottom of the Brick are **HOME** (left, labelled Menu), **SELECT** (middle), and **START** (right).
 
 **Notation:** `/` means either button. `+` means hold the first button and press the second.
 
