@@ -1,0 +1,12 @@
+#!/bin/sh
+CARD=/mnt/SDCARD
+sh "$CARD/Slot/System/install-autoboot.sh"
+# On failure also retire discovery to avoid a recursive stock-launcher loop.
+if [ -d "$CARD/trimui" ]; then
+    mkdir -p "$CARD/Slot/Installer"
+    # If the card cannot be written, continue only when the hook is installed
+    # (otherwise the stock launcher would find this installer again and loop).
+    mv "$CARD/trimui" "$CARD/Slot/Installer/trimui-failed-$$" 2>/dev/null \
+        || grep -q '^# SLOT_BRICK_BOOT_V[12]$' /usr/trimui/bin/runtrimui.sh || exit 1
+fi
+exec /bin/sh /usr/trimui/bin/runtrimui.sh

@@ -1,0 +1,19 @@
+[package]
+name = "slot-bootlogo"
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Turns a PNG/JPEG/BMP into a BMP shaped like the TrimUI Brick's original boot logo"
+
+# Standalone: not part of the slot workspace.
+[workspace]
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

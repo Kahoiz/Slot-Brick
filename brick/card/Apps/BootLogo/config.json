@@ -1,0 +1,1 @@
+{"label": "Logo", "icon": "icon.png", "launch": "launch.sh", "description": "Sets the picture in Apps/BootLogo/Image as the boot logo. Empty folder: restores the original"}

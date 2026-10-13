@@ -1,0 +1,191 @@
+<p align="center">
+  <img src="assets/slot-brick-banner.png" alt="Slot. for TrimUI Brick — retro handheld and cartridge artwork" width="100%">
+</p>
+
+<h1 align="center">Slot. for TrimUI Brick</h1>
+
+<p align="center">
+  A lightweight frontend for your Game Boy, Game Boy Color, and Game Boy Advance collection.<br>
+  Built for the <strong>original TrimUI Brick</strong> running <strong>stock firmware</strong>.
+</p>
+
+<p align="center">
+  <strong>GB · GBC · GBA</strong> &nbsp;|&nbsp; Stock firmware &nbsp;|&nbsp; Work in progress
+</p>
+
+<p align="center">
+  <a href="../../releases"><strong>Download</strong></a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#controls">Controls</a> ·
+  <a href="#troubleshooting">Troubleshooting</a> ·
+  <a href="brick/CHANGELOG.md">Changelog</a>
+</p>
+
+---
+
+A port of [Slot.](https://github.com/BrandonKowalski/slot), originally developed by **Brandon T. Kowalski** for the Anbernic RG SP. This version adapts Slot. to the original TrimUI Brick, including its screen, controls, LEDs, and stock firmware startup.
+
+> [!IMPORTANT]
+> **Unofficial port · Active development**
+>
+> This port may contain bugs, incomplete functionality, or missing features. Further improvements are planned, particularly to button shortcuts.
+>
+> Please report port-specific bugs in **this repository**, rather than in the upstream Slot. project.
+
+## Features
+
+| Feature | Details |
+| :--- | :--- |
+| **Brick integration** | Screen and control support, plus LED power, brightness, colour, and effects. |
+| **Sleep support** | Deep sleep with low battery drain. Auto-sleep after 5 minutes idle in menus or 15 minutes in game. |
+| **Adaptive performance** | Adaptive CPU clocks for smooth audio. |
+| **Wireless connectivity** | Wi-Fi support and an experimental two-player link over Wi-Fi. |
+| **Startup handling** | Support for slow-mounting SD cards. See the known startup issue below. |
+
+## Installation
+
+### 1. Back up your SD card
+
+Copy any important files from your existing SD card to your computer.
+
+> [!WARNING]
+> Formatting the SD card erases **all existing data**. Make a backup before continuing.
+
+### 2. Download the latest release
+
+Download `slot-brick-<version>-sd-card.zip` from the [Releases](../../releases) page and extract it on your computer.
+
+### 3. Format the SD card
+
+Use a formatting tool such as [Rufus](https://rufus.ie/) with these settings:
+
+| Setting | Value |
+| :--- | :--- |
+| File system | `FAT32` |
+| Volume label | `SLOT` |
+
+### 4. Copy the installation files
+
+Copy **all contents** of the extracted `SD-CARD` folder to the **root of your SD card**.
+
+> [!IMPORTANT]
+> Include hidden files and folders, especially `.slot-boot`. Copy the contents of `SD-CARD`, rather than the folder itself.
+
+### 5. Add your games and saves
+
+Copy your games, save files, save states, and BIOS files from your backup into their respective folders inside `Slot/`.
+
+> [!TIP]
+> Create game labels (cartridge artwork) with [Cart Studio](https://slot-cfw.fyi/) by Brandon T. Kowalski.
+
+### 6. Launch Slot.
+
+Insert the SD card into your TrimUI Brick and power on the device. Slot. should launch automatically.
+
+> [!NOTE]
+> **Known startup issue:** On first launch or after a restart, the stock firmware menu may appear instead of Slot.
+>
+> Open **Apps → Slot** to launch it manually. This should restore automatic startup.
+
+## Controls
+
+The three small buttons below the screen are **HOME** (left, labelled Menu), **SELECT** (middle), and **START** (right).
+
+**Notation:** `/` means either button. `+` means hold the first button and press the second.
+
+### Carousel
+
+| Input | Action |
+| :--- | :--- |
+| `Left` / `Right` | Browse the carousel |
+| `Up` / `Down` | Jump to the previous / next letter |
+| `L1` / `R1` | Switch between the GB, GBC, and GBA shelves |
+| Tap `A` | Resume the last save state |
+| Hold `A` | Start the game fresh |
+| `START` | Choose the emulator core |
+| `HOME` | Open the menu: settings, Wi-Fi, and About |
+
+### In game
+
+| Input | Action |
+| :--- | :--- |
+| Hold `HOME` | Save state, eject the cartridge, and return to the carousel |
+| Double-tap `HOME` | Open the save state switcher: load, delete, or undo within 30 seconds |
+| `SELECT` + `B` | Toggle LEDs |
+| `SELECT` + `HOME` | Open multiplayer Host / Join |
+| `SELECT` + `R1` | Save state |
+| `SELECT` + `L1` | Load the most recent save state |
+| `SELECT` + `A` | Cycle shaders (next) |
+| `SELECT` + `X` | **GBA:** switch between 3:2 and 4:3 full screen; saved per game |
+| `SELECT` + `Y` | Toggle colour correction |
+| `SELECT` + `Up` / `Down` | Adjust brightness |
+| `SELECT` + `Left` / `Right` | Adjust the blue light filter |
+| `L1` / `R1` | **GB / GBC:** switch between stretched / original picture |
+| Hold `L2` | Rewind |
+| Hold `R2` | Fast-forward |
+| Double-tap `R2` | Lock fast-forward on; press again to unlock |
+
+### System
+
+| Input | Action |
+| :--- | :--- |
+| Volume `+` / `−` | Adjust volume |
+| `Fn` slider | Mute / unmute |
+| Press `Power` | Sleep / wake; game state is saved before sleep |
+| Hold `Power` | Shut down or exit to the stock OS |
+
+## Stock firmware apps
+
+These utilities appear under **Apps** in the stock OS:
+
+| App | Purpose |
+| :--- | :--- |
+| **Slot** | Launch Slot. and enable automatic startup. |
+| **Logo** | Set a custom boot logo or restore the original. |
+| **Check** | Report why Slot. did or did not start, without changing anything. |
+| **Stock** | Disable Slot. autostart and restore stock startup. |
+
+## Multiplayer
+
+> [!WARNING]
+> **Experimental:** Multiplayer has not yet been tested on two physical devices.
+
+1. Install the **same Slot. version** on both Bricks, using the **same game, emulator core, and BIOS**.
+2. In game, press `SELECT` + `HOME` to open the game menu, then choose **Host** or **Join**.
+3. Start **Host** on one Brick first, then **Join** on the other.
+
+If the connection fails, attach both logs to your issue:
+
+```text
+Slot/Logs/multiplayer.log
+Slot/Logs/slot.log
+```
+
+## Troubleshooting
+
+| Issue or preference | What to do |
+| :--- | :--- |
+| Stock menu appears instead of Slot. | Launch **Apps → Slot**. For diagnostics, run **Apps → Check** and read `startup-report.txt` on the SD card. |
+| Skip Slot. at startup | Create an empty file named `Slot/DISABLE_AUTOBOOT`. |
+| Disable auto-sleep | Create an empty file named `Slot/DISABLE_AUTO_SLEEP`. |
+| Restore stock startup | Run **Apps → Stock**. |
+
+## Development
+
+Brick-specific code is gated behind the `brick` Cargo feature.
+
+- **Device scripts and apps:** [`brick/`](brick/)
+- **Change history:** [`brick/CHANGELOG.md`](brick/CHANGELOG.md)
+
+## Credits
+
+| Project / contributor | Contribution |
+| :--- | :--- |
+| [Brandon T. Kowalski](https://github.com/BrandonKowalski/slot) | Original Slot. frontend and Cart Studio |
+
+## AI Disclosure
+This port was developed with assistance from [Claude Opus](https://claude.ai/). 
+
+---
+
+<p align="center"><sub>Slot. for TrimUI Brick · An unofficial port by LordNordyx</sub></p>
