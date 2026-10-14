@@ -5,6 +5,10 @@
   Japanese releases) and run on FCEUmm (GPL-2.0), with save states, rewind, fast-forward and
   RetroAchievements. The emulator picture canvas is now sized per system (256x240 for NES); the
   Game Boys and GBA are unchanged.
+- The NES cart is drawn after the real one: a full-height grip on the left, the label recess
+  open to the top on the right, the arrow below it.
+- Cart Art fetches NES labels, cut out of the LaunchBox Games Database's pictures of standard NES
+  carts, found by the ROM's name.
 - New HOME > Cart Art (greyed out while Wi-Fi is off): GET CART ART gives games with no label a
   real cartridge label scan (by ROM checksum, from the slot art set behind Cart Studio, over
   HTTPS). Existing labels are never replaced. Labels can be deleted there one by one. Trimmed or patched ROMs are found
