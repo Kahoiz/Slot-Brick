@@ -264,7 +264,7 @@ pub struct App {
     pub(crate) wifi: Option<crate::brick_wifi::WifiMenu>,
     #[cfg(feature = "brick")]
     wifi_power: Option<Action>,
-    /// wlan0 is associated, polled with the Fn switch; Cart Art needs it.
+    /// wlan0 is associated, polled with the Fn switch; Cart Art and RetroAchievements need it.
     #[cfg(feature = "brick")]
     net_up: bool,
     phase: Phase,
@@ -853,7 +853,7 @@ impl App {
 
     fn quick_disabled(&self, row: QuickRow) -> bool {
         #[cfg(feature = "brick")]
-        if row == QuickRow::CartArt {
+        if matches!(row, QuickRow::CartArt | QuickRow::Achievements) {
             return !self.net_up;
         }
         let _ = row;
@@ -1478,7 +1478,7 @@ impl App {
             },
             QuickRow::Achievements => {
                 #[cfg(feature = "brick")]
-                {self.wifi=Some(crate::brick_wifi::WifiMenu::achievements());}
+                if self.net_up {self.wifi=Some(crate::brick_wifi::WifiMenu::achievements());}
             },
             QuickRow::DateTime => {
                 self.phase = clock_screen(self.utc_secs(), self.state.utc_offset_min, true);

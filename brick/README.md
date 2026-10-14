@@ -85,10 +85,9 @@ checksum kept in `Slot/System/Cache/crc32.txt`.
 `Slot/Logs/cart-art.txt` lists each game and what it got. Below GET CART ART, every game with a
 label is listed: press A twice on one to delete its label, then GET CART ART fetches a new one.
 
-**RetroAchievements:** **HOME → RetroAchievements** logs in to your
-[RetroAchievements](https://retroachievements.org) account and tests the connection (it needs
-Wi-Fi). Your password is sent once, over HTTPS, and never stored: Slot keeps only the login
-token, in `Slot/Config/retroachievements.txt`; delete that file or choose **LOG OUT** to forget
+**RetroAchievements:** **HOME → RetroAchievements** (greyed out while Wi-Fi is off) logs in to
+your [RetroAchievements](https://retroachievements.org) account and tests the connection.
+Your password is sent once, over HTTPS, and never stored: Slot keeps only the login token, in `Slot/Config/retroachievements.txt`; delete that file or choose **LOG OUT** to forget
 it. While logged in, games earn achievements in softcore mode (save states, rewind and
 fast-forward stay allowed): a small toast slides into the top-right corner with how many a
 game has when it starts, and with each unlock and its badge as it happens. A game's badges
