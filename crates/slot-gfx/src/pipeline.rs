@@ -122,8 +122,10 @@ impl GamePass {
     }
 
     pub fn upload(&mut self, xrgb8888: &[u8]) {
+        // A frame from another canvas (the core before a switch between a NES and a Game Boy)
+        // is skipped rather than drawn out of shape.
         let (w, h) = self.canvas;
-        if xrgb8888.len() < (w * h * 4) as usize {
+        if xrgb8888.len() != (w * h * 4) as usize {
             return;
         }
         unsafe {

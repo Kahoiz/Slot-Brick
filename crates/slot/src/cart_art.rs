@@ -24,6 +24,9 @@ const NES_ART: &str = "https://images.launchbox-app.com";
 const NES_LABELS: &str = "System/nes-cart-labels.txt";
 /// Pictures tried per NES game before giving up: the first may be a gold or odd cart.
 const NES_TRIES: usize = 3;
+/// A cut NES label's height at most: the shelf draws it a few hundred pixels tall, and some
+/// pictures are 3000 pixels high, which would cost megabytes on the card for nothing.
+const NES_LABEL_MAX_H: u32 = 512;
 const LISTING_MAX: usize = 8 << 20;
 const IMAGE_MAX: usize = 8 << 20;
 /// The index changes rarely; a week-old copy saves a megabyte per run.
@@ -147,7 +150,7 @@ fn run(
             });
             // No label scan (homebrew, most hacks): the shelf's file-name label stays.
             let outcome = match cart.platform {
-                Platform::Nes => fetch_nes_label(cart, &src),
+                Platform::Nes => fetch_nes_label(cart, &src)?,
                 _ => fetch_label(cart, &mut src)?,
             };
             let place = format!("{}/{}", cart.platform.dir_name(), cart.stem);
@@ -164,6 +167,10 @@ fn run(
                 Outcome::NoMatch => {
                     summary.missing += 1;
                     report.push_str(&format!("no match  {place}\n"));
+                }
+                Outcome::Unusable(why) => {
+                    summary.missing += 1;
+                    report.push_str(&format!("no label  {place}: {why}\n"));
                 }
                 Outcome::Failed(why) => {
                     summary.failed += 1;
@@ -190,6 +197,8 @@ enum Outcome {
     /// Where the art came from, for the report, and the label written.
     Saved(String, PathBuf),
     NoMatch,
+    /// The game was found, but none of its pictures gives a label: why, for the report.
+    Unusable(String),
     Failed(String),
 }
 
@@ -265,28 +274,33 @@ fn nes_file_ok(file: &str) -> bool {
 }
 
 /// A NES label, cut from a picture of the cart found by the ROM's name. A ROM that says it is
-/// a hack only matches a hack's picture, as for the other platforms.
-fn fetch_nes_label(cart: &Cart, src: &Sources) -> Outcome {
+/// a hack only matches a hack's picture, as for the other platforms. Err stops the run: the
+/// picture host cannot be reached, so every other NES cart would wait on it too.
+fn fetch_nes_label(cart: &Cart, src: &Sources) -> Result<Outcome, String> {
     let Some(name) = best_match(&cart.stem, &src.nes.names) else {
-        return Outcome::NoMatch;
+        return Ok(Outcome::NoMatch);
     };
     let mut why = Vec::new();
     for file in src.nes.files[name].iter().filter(|f| nes_file_ok(f)).take(NES_TRIES) {
+        // One picture failing (too large, refused, gone) leaves the game's others to try.
         let png = match get(src.nes_server, &format!("/{file}"), IMAGE_MAX) {
             Ok(Some(png)) => png,
             Ok(None) => {
                 why.push(format!("{file}: gone"));
                 continue;
             }
-            Err(e) => return Outcome::Failed(e),
+            Err(e) if crate::net::unreachable(&e) => return Err(format!("Can't reach the NES picture server: {e}")),
+            Err(e) => {
+                why.push(format!("{file}: {e}"));
+                continue;
+            }
         };
         match nes_label(&png) {
-            Ok(label) => return save_label(src.root, cart, &label, format!("{name} cart {file}")),
+            Ok(label) => return Ok(save_label(src.root, cart, &label, format!("{name} cart {file}"))),
             Err(e) => why.push(format!("{file}: {e}")),
         }
     }
-    eprintln!("slot: cart art: {}: no usable NES cart picture ({})", cart.stem, why.join("; "));
-    Outcome::NoMatch
+    Ok(Outcome::Unusable(format!("{name}: {}", why.join("; "))))
 }
 
 /// Where the label sits on the standard NES cart, as fractions of the cart's outline.
@@ -350,6 +364,7 @@ fn nes_label(png: &[u8]) -> Result<Vec<u8>, &'static str> {
         let i = ((y * w + lx) * 4) as usize;
         out.extend_from_slice(&rgba[i..i + (lw * 4) as usize]);
     }
+    let (out, lw, lh) = shrink(out, lw, lh, NES_LABEL_MAX_H);
     let mut bytes = Vec::new();
     let mut e = png::Encoder::new(&mut bytes, lw, lh);
     e.set_color(png::ColorType::Rgba);
@@ -358,6 +373,34 @@ fn nes_label(png: &[u8]) -> Result<Vec<u8>, &'static str> {
         .and_then(|mut w| w.write_image_data(&out))
         .map_err(|_| "cannot encode the label")?;
     Ok(bytes)
+}
+
+/// `rgba` (w x h) scaled down to at most `max_h` tall, each pixel the average of the ones it
+/// covers; a smaller picture is kept as it is.
+fn shrink(rgba: Vec<u8>, w: u32, h: u32, max_h: u32) -> (Vec<u8>, u32, u32) {
+    if h <= max_h {
+        return (rgba, w, h);
+    }
+    let (nw, nh) = (((w as u64 * max_h as u64) / h as u64).max(1) as u32, max_h);
+    let mut out = Vec::with_capacity((nw * nh * 4) as usize);
+    for y in 0..nh {
+        let (sy0, sy1) = (y * h / nh, ((y + 1) * h / nh).max(y * h / nh + 1));
+        for x in 0..nw {
+            let (sx0, sx1) = (x * w / nw, ((x + 1) * w / nw).max(x * w / nw + 1));
+            let mut sum = [0u64; 4];
+            for sy in sy0..sy1 {
+                for sx in sx0..sx1 {
+                    let i = ((sy * w + sx) * 4) as usize;
+                    for c in 0..4 {
+                        sum[c] += rgba[i + c] as u64;
+                    }
+                }
+            }
+            let n = ((sy1 - sy0) * (sx1 - sx0)) as u64;
+            out.extend(sum.map(|v| (v / n) as u8));
+        }
+    }
+    (out, nw, nh)
 }
 
 fn decode_rgba(bytes: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
@@ -1003,6 +1046,61 @@ mod tests {
         assert_eq!(nes_label(&famicom), Err("not a NES cart's shape"));
         assert_eq!(nes_label(&cart_png(280, 312, GREY, GREY, NES_LABEL_AT)), Err("no label on the cart"));
         assert_eq!(nes_label(b"<html>"), Err("not a readable PNG"));
+    }
+
+    #[test]
+    fn a_big_label_is_scaled_down_by_averaging_and_a_small_one_kept() {
+        let px = |c: u8| [c, c, c, 255];
+        // 4x4: left half black, right half white.
+        let rgba: Vec<u8> = (0..16).flat_map(|i| px(if i % 4 < 2 { 0 } else { 255 })).collect();
+        let (out, w, h) = shrink(rgba.clone(), 4, 4, 2);
+        assert_eq!((w, h), (2, 2));
+        assert_eq!(out, [px(0), px(255), px(0), px(255)].concat());
+        let (odd, w, h) = shrink(rgba.clone(), 4, 4, 3);
+        assert_eq!((w, h, odd.len()), (3, 3, 36), "a size that does not divide evenly");
+        assert_eq!(shrink(rgba.clone(), 4, 4, 4), (rgba, 4, 4));
+        let tall = cart_png(1400, 1560, GREY, RED, NES_LABEL_AT);
+        let (_, w, h) = decode_rgba(&nes_label(&tall).unwrap()).unwrap();
+        assert_eq!(h, NES_LABEL_MAX_H);
+        assert!((w as f32 / h as f32 - 644.0 / 1051.0).abs() < 0.01, "{w}x{h} lost the label's shape");
+    }
+
+    #[test]
+    fn an_unreachable_picture_server_stops_the_run_and_a_bad_picture_does_not() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let path = root.join("Games/NES/Mega Man (USA).nes");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"NES\x1a").unwrap();
+        std::fs::create_dir_all(root.join("System")).unwrap();
+        std::fs::create_dir_all(root.join("Logs")).unwrap();
+        std::fs::write(root.join(NES_LABELS), "Mega Man (USA)\trefused.png\nMega Man (USA)\tgood.png\n").unwrap();
+        let down = Servers { labels: "http://127.0.0.1:1".into(), nes: "http://127.0.0.1:1".into() };
+        let (_, done) = drain(&ArtJob::start_at(root.to_path_buf(), down));
+        assert!(done.unwrap_err().starts_with("Can't reach the NES picture server"));
+        let nes = serve(vec![
+            ("/refused.png".into(), 403, b"no".to_vec()),
+            ("/good.png".into(), 200, cart_png(280, 312, GREY, RED, NES_LABEL_AT)),
+        ]);
+        let (_, done) = drain(&ArtJob::start_at(root.to_path_buf(), Servers { labels: "http://127.0.0.1:1".into(), nes }));
+        assert_eq!(done, Ok(Summary { found: 1, missing: 0, failed: 0 }), "the refused picture ended the game");
+    }
+
+    #[test]
+    fn a_game_whose_pictures_are_all_odd_says_why_in_the_report() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let path = root.join("Games/NES/Hard Drivin' (USA).nes");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"NES\x1a").unwrap();
+        std::fs::create_dir_all(root.join("System")).unwrap();
+        std::fs::create_dir_all(root.join("Logs")).unwrap();
+        std::fs::write(root.join(NES_LABELS), "Hard Drivin' (USA)\ttengen.png\n").unwrap();
+        let nes = serve(vec![("/tengen.png".into(), 200, cart_png(280, 318, [20, 20, 20], RED, [0.15, 0.3, 0.85, 0.9]))]);
+        let (_, done) = drain(&ArtJob::start_at(root.to_path_buf(), Servers { labels: "http://127.0.0.1:1".into(), nes }));
+        assert_eq!(done, Ok(Summary { found: 0, missing: 1, failed: 0 }));
+        let report = std::fs::read_to_string(root.join(REPORT)).unwrap();
+        assert!(report.contains("no label  NES/Hard Drivin' (USA): Hard Drivin' (USA): tengen.png: not the standard NES cart"), "{report}");
     }
 
     #[test]
