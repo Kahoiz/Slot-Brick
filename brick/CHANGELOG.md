@@ -1,5 +1,23 @@
 # Changelog — Slot. for TrimUI Brick
 
+## Unreleased
+- New HOME > Cart Art (greyed out while Wi-Fi is off): GET CART ART gives games with no label a
+  real cartridge label scan (by ROM checksum, from the slot art set behind Cart Studio, over
+  HTTPS). Existing labels are never replaced. Labels can be deleted there one by one. Trimmed or patched ROMs are found
+  by file name and GBA game code; ROM hacks never get their base game's label.
+- The Wi-Fi keyboard is QWERTY under a number row, and briefly shows the last character typed.
+- New HOME > RetroAchievements: log in, test the connection, log out. Over HTTPS (rustls);
+  only the login token is kept. While logged in, games earn achievements (softcore), with a
+  small corner toast for the game's count and each unlock, with its badge like Steam's. Built on rcheevos 12.5 (MIT), vendored in
+  crates/slot-cheevos.
+- Wi-Fi that was already on (the firmware starts it at boot with the radio blocked) is restarted
+  properly when the Wi-Fi menu opens, so scanning works without turning it off and on first.
+- Fixed Wi-Fi never turning on: the firmware's wifi_init.sh needs an rfkill.elf the Brick
+  lacks, so the radio stayed blocked. Slot now unblocks it itself and checks the result.
+- Wi-Fi errors always leave Slot/Logs/wifi.log, and B really cancels a stuck toggle.
+- Closing a game no longer turns Wi-Fi off: multiplayer's radio cleanup now only runs after a
+  real link session, and brings normal Wi-Fi back if it was on before.
+
 ## v0.23
 - Settings > About credits the port to LordNordyx.
 - Short app names in the stock Apps list: Slot, Logo, Check and Stock, each with its own icon.

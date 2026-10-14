@@ -1,12 +1,16 @@
 #!/bin/sh
 # Wi-Fi helper for TrimUI Brick (tg5040).
-# The Anbernic firmware ships /etc/wifi/wifi_init.sh; the Brick firmware does
-# not, so slot (brick_wifi.rs), sleep.sh and slotlink.sh run this file instead.
-# Usage: brick_wifi.sh start|stop|radio
-# start: radio on, wpa_supplicant control socket up, DHCP client waiting.
-# stop:  DHCP + supplicant stopped, radio off.
+# slot (brick_wifi.rs) always runs this file. Brick firmware may ship its own
+# /etc/wifi/wifi_init.sh, but it calls an rfkill.elf that firmware lacks, so the
+# radio stays blocked; this helper unblocks it through sysfs and checks the result.
+# Usage: brick_wifi.sh start|stop|radio|ensure
+# start:  radio on, wpa_supplicant control socket up, DHCP client waiting.
+# stop:   DHCP + supplicant stopped, radio off.
+# ensure: for a supplicant someone else started (the firmware does at boot, with
+#         the radio still blocked): radio on, wlan0 up, DHCP client waiting.
 # Never blocks for long and never leaves daemons attached to our stdout,
-# because slot waits for this script to exit.
+# because slot waits for this script to exit. Everything is logged to
+# Slot/Logs/wifi.log (or /tmp/slot/wifi.log when the card is read-only).
 PATH=${SLOT_WIFI_PATH:+$SLOT_WIFI_PATH:}/usr/trimui/bin:/usr/sbin:/sbin:/usr/bin:/bin
 ROOT=${SLOT_ROOT:-/mnt/SDCARD/Slot}
 RUN=${SLOT_WIFI_RUN:-/tmp/slot}
@@ -14,21 +18,43 @@ RUN=${SLOT_WIFI_RUN:-/tmp/slot}
 ETC=${SLOT_WIFI_ETC:-/etc}
 NET=${SLOT_WIFI_NET:-/sys/class/net}
 VARRUN=${SLOT_WIFI_VARRUN:-/var/run}
+RFKILL=${SLOT_WIFI_RFKILL:-/sys/class/rfkill}
 IFACE=wlan0
 LOG="$ROOT/Logs/wifi.log"
 mkdir -p "$RUN" "$ROOT/Logs" 2>/dev/null
-[ ! -f "$LOG" ] || [ "$(wc -c < "$LOG")" -le 65536 ] || mv -f "$LOG" "$LOG.previous"
+# $RUN holds a DHCP script run as root: nobody else may write there.
+chmod 700 "$RUN" 2>/dev/null
+[ ! -f "$LOG" ] || [ "$(wc -c < "$LOG")" -le 65536 ] || mv -f "$LOG" "$LOG.previous" 2>/dev/null
+# An unwritable card must not lose the log: slot tells the user to read it.
+( : >> "$LOG" ) 2>/dev/null || LOG="$RUN/wifi.log"
 exec >> "$LOG" 2>&1 < /dev/null
 echo "--- $(date) brick_wifi.sh $*"
 
-# A firmware that does ship the real helper keeps using it.
-if [ -f "$ETC/wifi/wifi_init.sh" ]; then
-    exec /bin/sh "$ETC/wifi/wifi_init.sh" "$@"
-fi
-
-radio() {
+radio() { # radio block|unblock
     if command -v rfkill.elf >/dev/null 2>&1; then rfkill.elf "$1" wifi
     elif command -v rfkill >/dev/null 2>&1; then rfkill "$1" wifi
+    fi
+    # Set the kernel switch directly too: Brick firmware has neither tool.
+    soft=1; [ "$1" = block ] || soft=0
+    for r in "$RFKILL"/rfkill*; do
+        [ "$(cat "$r/type" 2>/dev/null)" = wlan ] || continue
+        echo "$soft" > "$r/soft" 2>/dev/null
+        echo "radio $1: $(basename "$r") soft=$(cat "$r/soft" 2>/dev/null) hard=$(cat "$r/hard" 2>/dev/null)"
+    done
+}
+
+iface_up() { # the kernel's IFF_UP bit, so a failed ifconfig is caught
+    flags=$(cat "$NET/$IFACE/flags" 2>/dev/null) || return 1
+    [ $((flags & 1)) = 1 ]
+}
+
+# A socket file alone can be left over from a dead supplicant: ask it.
+supplicant_ready() {
+    dir=$(find_socket) || return 1
+    if command -v wpa_cli >/dev/null 2>&1; then
+        [ "$(wpa_cli -p "$dir" -i "$IFACE" ping 2>/dev/null)" = PONG ]
+    else
+        pidof wpa_supplicant >/dev/null 2>&1
     fi
 }
 
@@ -111,21 +137,46 @@ stop_dhcp() {
     rm -f "$RUN/udhcpc.pid"
 }
 
+# Some firmware ships its own helper. Try it first for start/stop, with its output in
+# this log, but never trust it blindly: start only counts once wlan0 is up and a
+# supplicant answers, and stop still runs ours so nothing is left powered.
+firmware() { # firmware <verb>
+    fw="$ETC/wifi/wifi_init.sh"
+    [ -f "$fw" ] || return 1
+    echo "running firmware helper: $fw $1"
+    /bin/sh "$fw" "$1"
+    rc=$?
+    echo "firmware helper $1 exited $rc"
+    return "$rc"
+}
+
 case "${1:-}" in
 start)
+    # Before the firmware helper too, whose own unblock needs the missing rfkill.elf.
+    radio unblock
+    if firmware start && wait_for 50 iface_up && wait_for 30 supplicant_ready; then
+        echo "control socket: $(find_socket)"
+        start_dhcp
+        exit 0
+    fi
+    [ ! -f "$ETC/wifi/wifi_init.sh" ] || echo 'firmware helper did not bring Wi-Fi up; using slot helper'
     radio unblock
     if ! wait_for 50 [ -d "$NET/$IFACE" ]; then
         echo "no $IFACE interface (driver not loaded?)"; exit 1
     fi
-    ifconfig "$IFACE" up || { echo "cannot bring $IFACE up"; exit 1; }
-    if ! find_socket >/dev/null; then
+    ifconfig "$IFACE" up && wait_for 20 iface_up || { echo "cannot bring $IFACE up"; exit 1; }
+    if ! supplicant_ready; then
         command -v wpa_supplicant >/dev/null 2>&1 || { echo 'wpa_supplicant not found'; exit 1; }
+        # Any supplicant still running cannot be reached; replace it and its stale socket.
+        for p in $(pidof wpa_supplicant 2>/dev/null); do kill "$p" 2>/dev/null; done
+        wait_for 20 sh -c '! pidof wpa_supplicant >/dev/null 2>&1'
+        for dir in "$ETC/wifi/sockets" "$VARRUN/wpa_supplicant"; do rm -f "$dir/$IFACE"; done
         conf=$(pick_conf)
         echo "starting wpa_supplicant with $conf"
         wpa_supplicant -B -D nl80211 -i "$IFACE" -c "$conf" -P "$RUN/wpa_supplicant.pid" \
             || wpa_supplicant -B -D wext -i "$IFACE" -c "$conf" -P "$RUN/wpa_supplicant.pid" \
             || { echo 'wpa_supplicant failed to start'; exit 1; }
-        wait_for 50 find_socket >/dev/null || { echo 'control socket did not appear'; exit 1; }
+        wait_for 50 supplicant_ready || { echo 'wpa_supplicant did not answer on its control socket'; exit 1; }
     fi
     echo "control socket: $(find_socket)"
     start_dhcp
@@ -135,10 +186,29 @@ radio)
     # Radio and interface only, for slotlink.sh's private AP/join daemons.
     radio unblock
     wait_for 50 [ -d "$NET/$IFACE" ] || { echo "no $IFACE interface (driver not loaded?)"; exit 1; }
-    ifconfig "$IFACE" up || { echo "cannot bring $IFACE up"; exit 1; }
+    ifconfig "$IFACE" up && wait_for 20 iface_up || { echo "cannot bring $IFACE up"; exit 1; }
+    exit 0
+    ;;
+ensure)
+    supplicant_ready || { echo 'no supplicant answering; nothing to repair'; exit 1; }
+    # A supplicant started under a blocked radio or a down wlan0 answers but never
+    # recovers (scans fail): restart it the way turning Wi-Fi off and on does.
+    blocked=0
+    for r in "$RFKILL"/rfkill*; do
+        [ "$(cat "$r/type" 2>/dev/null)" = wlan ] && [ "$(cat "$r/soft" 2>/dev/null)" = 1 ] && blocked=1
+    done
+    if [ "$blocked" = 1 ] || ! iface_up; then
+        echo 'supplicant running with the radio off; restarting Wi-Fi'
+        /bin/sh "$0" stop
+        exec /bin/sh "$0" start
+    fi
+    radio unblock
+    iface_up || { ifconfig "$IFACE" up && wait_for 20 iface_up; } || { echo "cannot bring $IFACE up"; exit 1; }
+    start_dhcp
     exit 0
     ;;
 stop)
+    firmware stop || :
     stop_dhcp
     if dir=$(find_socket) && command -v wpa_cli >/dev/null 2>&1; then
         wpa_cli -p "$dir" -i "$IFACE" terminate >/dev/null 2>&1
@@ -151,6 +221,6 @@ stop)
     exit 0
     ;;
 *)
-    echo "usage: $0 start|stop|radio"; exit 2
+    echo "usage: $0 start|stop|radio|ensure"; exit 2
     ;;
 esac

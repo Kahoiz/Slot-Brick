@@ -38,6 +38,8 @@ struct Host {
     options: std::collections::HashMap<String, std::ffi::CString>,
     options_dirty: bool,
     declared: std::collections::HashMap<String, Vec<String>>,
+    /// The core's SET_MEMORY_MAPS descriptors; their pointers live as long as the game.
+    memory_map: Vec<MemoryDescriptor>,
 }
 
 thread_local! {
@@ -209,6 +211,18 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
                 h.netpacket = Some(std::ptr::read(data as *const NetpacketCallback));
             })
             .is_some()
+        }
+        SET_MEMORY_MAPS => {
+            if data.is_null() {
+                return false;
+            }
+            let map = &*(data as *const MemoryMap);
+            let list = if map.descriptors.is_null() {
+                Vec::new()
+            } else {
+                std::slice::from_raw_parts(map.descriptors, map.num_descriptors.min(256) as usize).to_vec()
+            };
+            with_host(|h| h.memory_map = list).is_some()
         }
         _ => false,
     }
@@ -484,6 +498,7 @@ impl LibretroCore {
             options: std::collections::HashMap::new(),
             options_dirty: false,
             declared: std::collections::HashMap::new(),
+            memory_map: Vec::new(),
         });
         unsafe {
             let _a = Active::bind(&mut host);
@@ -667,6 +682,19 @@ impl RetroCore for LibretroCore {
         self.av
     }
 
+    fn memory_map(&self) -> (*const c_void, u32) {
+        match self.host.memory_map.is_empty() {
+            true => (ptr::null(), 0),
+            false => (self.host.memory_map.as_ptr() as *const c_void, self.host.memory_map.len() as u32),
+        }
+    }
+
+    fn memory_region(&mut self, id: u32) -> Option<(*mut u8, usize)> {
+        let data = unsafe { (self.api.get_memory_data)(id) };
+        let len = unsafe { (self.api.get_memory_size)(id) };
+        (!data.is_null() && len > 0).then_some((data as *mut u8, len))
+    }
+
     fn rumble(&self) -> Rumble {
         self.host.rumble.clone()
     }
@@ -715,6 +743,7 @@ mod tests {
             options,
             options_dirty,
             declared: HashMap::new(),
+            memory_map: Vec::new(),
         })
     }
 
