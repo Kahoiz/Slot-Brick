@@ -76,8 +76,8 @@ doesn't flash anything to the device.
 **NES:** put `.nes` ROMs in `Slot/Games/NES`; they get their own shelf of NES cartridges and run
 on FCEUmm. No BIOS is needed. NES carts are grey; a ROM named as a Japanese release, such as
 `Rockman (Japan).nes`, wears a coloured Famicom plastic instead (picked from its name, not the
-real cart's colour). Put a label picture in `Slot/Labels/NES` as for the other systems; Cart Art
-has no NES scans to fetch. The picture is the TV's 256 x 224, padded to 4:3 at actual size or
+real cart's colour). Cart Art fetches NES labels too (see below), or put your own picture in
+`Slot/Labels/NES`. The picture is the TV's 256 x 224, padded to 4:3 at actual size or
 stretched to fill the screen with `L1` / `R1`. RetroAchievements work for NES too.
 
 **Cart art:** connect to Wi-Fi, then open **HOME → Cart Art** (greyed out while Wi-Fi is off).
@@ -88,6 +88,11 @@ A game is found by the ROM's checksum, or for a trimmed or patched ROM by its fi
 (helped by the GBA game code in its header). ROM hacks and homebrew keep the label with their
 file name, so they never look like the game they are based on. Each ROM is read once and its
 checksum kept in `Slot/System/Cache/crc32.txt`.
+
+NES labels come from the [LaunchBox Games Database](https://gamesdb.launchbox-app.com)'s
+pictures of the cartridges: Slot finds the game by its ROM's file name (No-Intro names work best,
+for example `Mega Man 2 (USA).nes`) and cuts the label out of a picture of the standard grey NES
+cart. Carts of another shape (Tengen, gold Zelda, unlicensed) keep their file-name label.
 
 `Slot/Logs/cart-art.txt` lists each game and what it got. Below GET CART ART, every game with a
 label is listed: press A twice on one to delete its label, then GET CART ART fetches a new one.
