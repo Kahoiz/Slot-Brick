@@ -28,10 +28,12 @@ pub enum QuickRow {
     LedColor,
     LedEffect,
     Wifi,
+    CartArt,
+    Achievements,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 22] = [
+    pub const ALL: [QuickRow; 24] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -54,6 +56,8 @@ impl QuickRow {
         QuickRow::LedColor,
         QuickRow::LedEffect,
         QuickRow::Wifi,
+        QuickRow::CartArt,
+        QuickRow::Achievements,
     ];
 
     #[cfg(not(feature = "brick"))]
@@ -65,7 +69,7 @@ impl QuickRow {
     ];
 
     #[cfg(feature = "brick")]
-    pub const MAIN: [QuickRow; 6] = [QuickRow::Screen,QuickRow::Game,QuickRow::Lights,QuickRow::Wifi,QuickRow::DateTime,QuickRow::About];
+    pub const MAIN: [QuickRow; 8] = [QuickRow::Screen,QuickRow::Game,QuickRow::Lights,QuickRow::Wifi,QuickRow::CartArt,QuickRow::Achievements,QuickRow::DateTime,QuickRow::About];
     pub const LIGHTS: [QuickRow; 6] = [QuickRow::LedMode,QuickRow::LedTop,QuickRow::LedButtons,QuickRow::LedTriggers,QuickRow::LedColor,QuickRow::LedEffect];
     pub fn led_setting(self) -> bool { Self::LIGHTS.contains(&self) }
 
@@ -131,6 +135,8 @@ impl QuickRow {
     pub fn label(self) -> &'static str {
         match self {
             QuickRow::Wifi => "Wi-Fi",
+            QuickRow::CartArt => "Cart Art",
+            QuickRow::Achievements => "RetroAchievements",
             QuickRow::Lights => "LEDs",
             QuickRow::LedMode => "Lights",
             QuickRow::LedTop => "Top Bar",
@@ -158,7 +164,7 @@ impl QuickRow {
     pub fn opens(self) -> bool {
         matches!(
             self,
-            QuickRow::DateTime | QuickRow::About | QuickRow::Screen | QuickRow::Game | QuickRow::Lights | QuickRow::Wifi
+            QuickRow::DateTime | QuickRow::About | QuickRow::Screen | QuickRow::Game | QuickRow::Lights | QuickRow::Wifi | QuickRow::CartArt | QuickRow::Achievements
         )
     }
 
@@ -280,7 +286,14 @@ impl QuickValue {
 }
 
 pub const QUICK_PITCH: f32 = 52.0;
-pub const QUICK_TOP: f32 = (OUT_H as f32 - QUICK_PITCH * QuickRow::MAIN.len() as f32) / 2.0;
+pub const QUICK_TOP: f32 = (OUT_H as f32 - quick_pitch(QuickRow::MAIN.len()) * QuickRow::MAIN.len() as f32) / 2.0;
+
+/// Row spacing for a page of `rows`: QUICK_PITCH, or tighter for a page that would
+/// otherwise run into the legend (the Brick's main menu).
+pub const fn quick_pitch(rows: usize) -> f32 {
+    let fit = ((QUICK_SPLIT - OUT_H as f32 / 2.0) * 2.0 / rows as f32) as u32 as f32;
+    if fit < QUICK_PITCH { fit } else { QUICK_PITCH }
+}
 pub const QUICK_EDGE: f32 = 32.0;
 const BAR_INSET: f32 = 4.0;
 const TYPE_DROP: f32 = 4.0;
@@ -372,6 +385,8 @@ pub struct QuickMenu<'a> {
     pub values: [Option<QuickValue>; QuickRow::ALL.len()],
     pub clock: Option<[(TexId, u32, u32); 2]>,
     pub faces: Option<&'a QuickMenuFaces>,
+    /// Rows shown greyed out that do nothing, such as Cart Art with Wi-Fi off.
+    pub disabled: [bool; QuickRow::ALL.len()],
 }
 
 impl QuickMenu<'_> {
@@ -387,7 +402,7 @@ impl QuickMenu<'_> {
             x: 0.0,
             y: row_top(self.row) + BAR_INSET,
             w: OUT_W as f32,
-            h: QUICK_PITCH - 2.0 * BAR_INSET,
+            h: quick_pitch(self.row.page().len()) - 2.0 * BAR_INSET,
             colour: edge(),
         });
         let Some(faces) = self.faces else {
@@ -398,7 +413,8 @@ impl QuickMenu<'_> {
             let y = row_top(row) + TYPE_DROP;
             let lit = row == self.row;
             if let Some(&(tex, w, h)) = faces.labels.get(row.index()) {
-                push(out, tex, QUICK_EDGE - pad, y, w, h);
+                let alpha = if self.disabled[row.index()] { DISABLED_ALPHA } else { 1.0 };
+                push_alpha(out, tex, QUICK_EDGE - pad, y, w, h, alpha);
             }
             let value = match row {
                 QuickRow::DateTime => self.clock.map(|c| c[lit as usize]),
@@ -422,24 +438,32 @@ impl QuickMenu<'_> {
         }
         let [back, change, open] = faces.legend;
         let other = if self.row.opens() { open } else { change };
-        for (tex, w, x) in centred_hints(&[back, other], LEGEND_GAP) {
+        let hints: &[(TexId, u32)] = if self.disabled[self.row.index()] { &[back] } else { &[back, other] };
+        for (tex, w, x) in centred_hints(hints, LEGEND_GAP) {
             push(out, tex, x, LEGEND_Y, w, HINT_H);
         }
     }
 }
 
 fn row_top(row: QuickRow) -> f32 {
-    let top = (OUT_H as f32 - QUICK_PITCH * row.page().len() as f32) / 2.0;
-    top + QUICK_PITCH * row.position() as f32
+    let pitch = quick_pitch(row.page().len());
+    let top = (OUT_H as f32 - pitch * row.page().len() as f32) / 2.0;
+    top + pitch * row.position() as f32
 }
 
+const DISABLED_ALPHA: f32 = 0.35;
+
 fn push(out: &mut Vec<Draw>, tex: TexId, x: f32, y: f32, w: u32, h: u32) {
+    push_alpha(out, tex, x, y, w, h, 1.0);
+}
+
+fn push_alpha(out: &mut Vec<Draw>, tex: TexId, x: f32, y: f32, w: u32, h: u32, alpha: f32) {
     out.push(Draw::Tex {
         x: x.round(),
         y: y.round(),
         w: w as f32,
         h: h as f32,
         tex,
-        alpha: 1.0,
+        alpha,
     });
 }

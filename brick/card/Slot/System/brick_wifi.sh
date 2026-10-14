@@ -3,12 +3,14 @@
 # slot (brick_wifi.rs) always runs this file. Brick firmware may ship its own
 # /etc/wifi/wifi_init.sh, but it calls an rfkill.elf that firmware lacks, so the
 # radio stays blocked; this helper unblocks it through sysfs and checks the result.
-# Usage: brick_wifi.sh start|stop|radio
-# start: radio on, wpa_supplicant control socket up, DHCP client waiting.
-# stop:  DHCP + supplicant stopped, radio off.
+# Usage: brick_wifi.sh start|stop|radio|ensure
+# start:  radio on, wpa_supplicant control socket up, DHCP client waiting.
+# stop:   DHCP + supplicant stopped, radio off.
+# ensure: for a supplicant someone else started (the firmware does at boot, with
+#         the radio still blocked): radio on, wlan0 up, DHCP client waiting.
 # Never blocks for long and never leaves daemons attached to our stdout,
 # because slot waits for this script to exit. Everything is logged to
-# Slot/Logs/wifi.log (or /tmp/slot-wifi.log when the card is read-only).
+# Slot/Logs/wifi.log (or /tmp/slot/wifi.log when the card is read-only).
 PATH=${SLOT_WIFI_PATH:+$SLOT_WIFI_PATH:}/usr/trimui/bin:/usr/sbin:/sbin:/usr/bin:/bin
 ROOT=${SLOT_ROOT:-/mnt/SDCARD/Slot}
 RUN=${SLOT_WIFI_RUN:-/tmp/slot}
@@ -20,9 +22,11 @@ RFKILL=${SLOT_WIFI_RFKILL:-/sys/class/rfkill}
 IFACE=wlan0
 LOG="$ROOT/Logs/wifi.log"
 mkdir -p "$RUN" "$ROOT/Logs" 2>/dev/null
+# $RUN holds a DHCP script run as root: nobody else may write there.
+chmod 700 "$RUN" 2>/dev/null
 [ ! -f "$LOG" ] || [ "$(wc -c < "$LOG")" -le 65536 ] || mv -f "$LOG" "$LOG.previous" 2>/dev/null
 # An unwritable card must not lose the log: slot tells the user to read it.
-( : >> "$LOG" ) 2>/dev/null || LOG=/tmp/slot-wifi.log
+( : >> "$LOG" ) 2>/dev/null || LOG="$RUN/wifi.log"
 exec >> "$LOG" 2>&1 < /dev/null
 echo "--- $(date) brick_wifi.sh $*"
 
@@ -185,6 +189,24 @@ radio)
     ifconfig "$IFACE" up && wait_for 20 iface_up || { echo "cannot bring $IFACE up"; exit 1; }
     exit 0
     ;;
+ensure)
+    supplicant_ready || { echo 'no supplicant answering; nothing to repair'; exit 1; }
+    # A supplicant started under a blocked radio or a down wlan0 answers but never
+    # recovers (scans fail): restart it the way turning Wi-Fi off and on does.
+    blocked=0
+    for r in "$RFKILL"/rfkill*; do
+        [ "$(cat "$r/type" 2>/dev/null)" = wlan ] && [ "$(cat "$r/soft" 2>/dev/null)" = 1 ] && blocked=1
+    done
+    if [ "$blocked" = 1 ] || ! iface_up; then
+        echo 'supplicant running with the radio off; restarting Wi-Fi'
+        /bin/sh "$0" stop
+        exec /bin/sh "$0" start
+    fi
+    radio unblock
+    iface_up || { ifconfig "$IFACE" up && wait_for 20 iface_up; } || { echo "cannot bring $IFACE up"; exit 1; }
+    start_dhcp
+    exit 0
+    ;;
 stop)
     firmware stop || :
     stop_dhcp
@@ -199,6 +221,6 @@ stop)
     exit 0
     ;;
 *)
-    echo "usage: $0 start|stop|radio"; exit 2
+    echo "usage: $0 start|stop|radio|ensure"; exit 2
     ;;
 esac

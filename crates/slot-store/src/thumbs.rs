@@ -1,115 +1,15 @@
-//! Matching ROM file names against the libretro thumbnail collection
-//! (thumbnails.libretro.com). Names there are No-Intro names with the characters
-//! `&*/:`<>?\|"` replaced by `_`; ROMs on a card are often named differently, so
-//! this matches on a normalised title and then picks the best region and release.
+//! Matching ROM file names against No-Intro names, as libretro writes them (the
+//! characters `&*/:`<>?\|"` replaced by `_`), for Cart Art's label lookup. ROMs on a card
+//! are often named differently, so this matches on a normalised title and then picks the
+//! best region and release.
 
 use unicode_normalization::UnicodeNormalization;
-
-use crate::Platform;
-
-/// The kinds of picture libretro keeps per game, as its directory names.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ThumbKind {
-    Boxart,
-    Title,
-    Snap,
-}
-
-impl ThumbKind {
-    pub const ALL: [ThumbKind; 3] = [ThumbKind::Boxart, ThumbKind::Title, ThumbKind::Snap];
-
-    pub fn dir(self) -> &'static str {
-        match self {
-            ThumbKind::Boxart => "Named_Boxarts",
-            ThumbKind::Title => "Named_Titles",
-            ThumbKind::Snap => "Named_Snaps",
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            ThumbKind::Boxart => "BOX ART",
-            ThumbKind::Title => "TITLE SCREEN",
-            ThumbKind::Snap => "IN-GAME SHOT",
-        }
-    }
-
-    /// `self` first, then the other kinds, for games missing the preferred one.
-    pub fn with_fallbacks(self) -> Vec<ThumbKind> {
-        let mut kinds = vec![self];
-        kinds.extend(Self::ALL.into_iter().filter(|k| *k != self));
-        kinds
-    }
-}
-
-/// libretro's system directory name, eg "Nintendo - Game Boy Advance".
-pub fn thumb_system(platform: Platform) -> String {
-    format!("Nintendo - {}", platform.name())
-}
 
 /// A name as libretro stores it on disk.
 pub fn libretro_name(name: &str) -> String {
     name.chars()
         .map(|c| if "&*/:`<>?\\|\"".contains(c) { '_' } else { c })
         .collect()
-}
-
-/// Percent-encodes everything but RFC 3986 unreserved characters.
-pub fn url_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() * 3 / 2);
-    for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
-}
-
-fn url_unescape(s: &str) -> String {
-    let b = s.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    let hex = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
-    while i < b.len() {
-        if b[i] == b'%' && i + 2 < b.len() {
-            if let (Some(hi), Some(lo)) = (hex(b[i + 1]), hex(b[i + 2])) {
-                out.push(hi << 4 | lo);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(b[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-/// Game names (without ".png") from a thumbnail directory's HTML index.
-pub fn parse_listing(html: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    let mut rest = html;
-    while let Some(at) = rest.find("href=\"") {
-        rest = &rest[at + 6..];
-        let Some(end) = rest.find('"') else {
-            break;
-        };
-        let href = rest[..end].replace("&amp;", "&");
-        rest = &rest[end..];
-        if href.contains('/') {
-            continue;
-        }
-        let name = url_unescape(&href);
-        if let Some(stem) = name.strip_suffix(".png") {
-            if !stem.is_empty() {
-                names.push(stem.to_string());
-            }
-        }
-    }
-    names.sort();
-    names.dedup();
-    names
 }
 
 /// The title with tags, punctuation, accents, case and "the" removed:
@@ -159,6 +59,10 @@ enum Region {
     World,
     Europe,
     Japan,
+    Germany,
+    France,
+    Spain,
+    Italy,
 }
 
 fn regions(name: &str) -> Vec<Region> {
@@ -169,13 +73,21 @@ fn regions(name: &str) -> Vec<Region> {
             "World" => out.push(Region::World),
             "Europe" => out.push(Region::Europe),
             "Japan" => out.push(Region::Japan),
-            // GoodTools: (U), (E), (J), (UE), (JU) ...
-            t if !t.is_empty() && t.len() <= 3 && t.chars().all(|c| "UEJW".contains(c)) => {
+            "Germany" => out.push(Region::Germany),
+            "France" => out.push(Region::France),
+            "Spain" => out.push(Region::Spain),
+            "Italy" => out.push(Region::Italy),
+            // GoodTools: (U), (E), (J), (G), (UE), (JU) ...
+            t if !t.is_empty() && t.len() <= 3 && t.chars().all(|c| "UEJWGFSI".contains(c)) => {
                 for c in t.chars() {
                     out.push(match c {
                         'U' => Region::Usa,
                         'E' => Region::Europe,
                         'J' => Region::Japan,
+                        'G' => Region::Germany,
+                        'F' => Region::France,
+                        'S' => Region::Spain,
+                        'I' => Region::Italy,
                         _ => Region::World,
                     });
                 }
@@ -218,6 +130,7 @@ fn score(candidate: &str, wanted: &[Region], asked: &[String]) -> i32 {
             Region::World => 25,
             Region::Europe => 20,
             Region::Japan => 10,
+            Region::Germany | Region::France | Region::Spain | Region::Italy => 15,
         })
         .max()
         .unwrap_or(0);

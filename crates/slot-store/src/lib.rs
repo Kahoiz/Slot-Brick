@@ -33,6 +33,4 @@ pub use stamp::{
     civil_from_days, days_from_civil, days_in_month, format_stamp, parse_stamp, stamp_now,
 };
 pub use theme::{Theme, THEME_FILE};
-pub use thumbs::{
-    best_match, libretro_name, parse_listing, thumb_system, title_key, url_escape, ThumbKind,
-};
+pub use thumbs::{best_match, libretro_name, title_key};

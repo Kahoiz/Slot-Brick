@@ -33,9 +33,25 @@ stop_owned() {
     elif command -v rfkill >/dev/null 2>&1; then rfkill block wifi || :; fi
     rm -f "$RUN/hostapd.pid" "$RUN/wpa_supplicant.pid" "$RUN/hostapd.conf" "$RUN/join.conf"
 }
+# Set while a link session owns wlan0; RESTORE remembers that normal Wi-Fi was on before.
+ACTIVE="$RUN/active"
+RESTORE="$RUN/restore-wifi"
 case "${2:-}" in
     warm) exit 0;;
-    down|cool) stop_owned; echo 'Wi-Fi off'; exit 0;;
+    down|cool)
+        # Slot asks for this whenever a game or its menu closes. Only a link session's own
+        # radio setup is undone; Wi-Fi nobody linked over stays exactly as it is.
+        [ -e "$ACTIVE" ] || { echo 'No link session; Wi-Fi left alone'; exit 0; }
+        stop_owned
+        rm -f "$ACTIVE"
+        if [ -e "$RESTORE" ]; then
+            rm -f "$RESTORE"
+            echo 'Link session over; turning Wi-Fi back on'
+            ( sh "$HELPER" start ) < /dev/null > /dev/null 2>&1 &
+        else
+            echo 'Wi-Fi off'
+        fi
+        exit 0;;
     host|join) role=$2;;
     *) echo 'Invalid multiplayer action'; exit 2;;
 esac
@@ -48,6 +64,9 @@ chmod 700 "$RUN"
 trap 'stop_owned' EXIT
 trap 'exit 1' HUP INT TERM
 [ -f "$HELPER" ] || { echo 'Missing firmware Wi-Fi helper'; exit 1; }
+# From here on wlan0 belongs to the link session until "down".
+if [ ! -e "$ACTIVE" ] && pgrep -x wpa_supplicant > /dev/null 2>&1; then : > "$RESTORE"; fi
+: > "$ACTIVE"
 stop_owned
 if [ "$HELPER" = "$CARD_HELPER" ]; then
     # Slot's own helper: station mode is already stopped; just power the radio.

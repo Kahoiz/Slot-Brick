@@ -1,6 +1,6 @@
-use slot_store::{best_match, libretro_name, parse_listing, title_key, url_escape, ThumbKind};
+use slot_store::{best_match, libretro_name, title_key};
 
-/// Real entries from thumbnails.libretro.com, Named_Boxarts.
+/// Real No-Intro names, as libretro writes them.
 const GBA: &[&str] = &[
     "Golden Sun (France)",
     "Golden Sun (Germany)",
@@ -117,24 +117,6 @@ fn libretro_replaces_reserved_characters() {
 }
 
 #[test]
-fn urls_escape_everything_but_unreserved() {
-    assert_eq!(url_escape("Pokemon - Emerald (USA, Europe).png"), "Pokemon%20-%20Emerald%20%28USA%2C%20Europe%29.png");
-}
-
-#[test]
-fn listings_keep_only_pngs_in_the_directory() {
-    let html = r#"<a href="?C=N;O=D">Name</a> <a href="/Nintendo%20-%20Game%20Boy/">Parent</a>
-        <a href="Tetris%20DX%20%28World%29.png">Tetris DX (World).png</a>
-        <a href="Mario%20&amp;%20Luigi.png">x</a> <a href="notes.txt">n</a>"#;
-    assert_eq!(parse_listing(html), vec!["Mario & Luigi".to_string(), "Tetris DX (World)".to_string()]);
-}
-
-#[test]
-fn the_preferred_kind_comes_first_then_the_rest() {
-    assert_eq!(ThumbKind::Title.with_fallbacks(), vec![ThumbKind::Title, ThumbKind::Boxart, ThumbKind::Snap]);
-}
-
-#[test]
 fn hacks_match_only_when_listed_and_win_when_the_rom_says_hack() {
     let list = [
         "Pokemon - Emerald Version (USA, Europe)",
@@ -148,4 +130,15 @@ fn hacks_match_only_when_listed_and_win_when_the_rom_says_hack() {
     assert_eq!(find("Pokemon - Emerald (Hack)", &list), None, "never the original's art for a hack");
     let both = ["Tetris (World) (Beta)", "Tetris (World) (Hack)"];
     assert_eq!(find("Tetris (Hack)", &both).as_deref(), Some("Tetris (World) (Hack)"));
+}
+
+#[test]
+fn goodtools_language_regions_pick_that_release() {
+    let list = [
+        "Pokemon - Red Version (USA, Europe) (SGB Enhanced)",
+        "Pokemon - Rote Edition (Germany) (SGB Enhanced)",
+        "Pokemon - Red Version (Germany) (SGB Enhanced)",
+    ];
+    assert_eq!(find("Pokemon - Red Version (G)", &list).as_deref(), Some(list[2]));
+    assert_eq!(find("Pokemon - Red Version (U)", &list).as_deref(), Some(list[0]));
 }

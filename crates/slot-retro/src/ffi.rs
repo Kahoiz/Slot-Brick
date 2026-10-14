@@ -17,6 +17,8 @@ pub const GET_LOG_INTERFACE: c_uint = 27;
 pub const GET_SAVE_DIRECTORY: c_uint = 31;
 pub const SET_AUDIO_BUFFER_STATUS_CALLBACK: c_uint = 62;
 pub const SET_NETPACKET_INTERFACE: c_uint = 78;
+/// 36 | RETRO_ENVIRONMENT_EXPERIMENTAL
+pub const SET_MEMORY_MAPS: c_uint = 36 | 0x10000;
 
 pub const RUMBLE_STRONG: c_uint = 0;
 pub const RUMBLE_WEAK: c_uint = 1;
@@ -64,6 +66,31 @@ pub struct SystemTiming {
 pub struct SystemAvInfo {
     pub geometry: GameGeometry,
     pub timing: SystemTiming,
+}
+
+/// retro_memory_descriptor, as cores pass it in SET_MEMORY_MAPS.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MemoryDescriptor {
+    pub flags: u64,
+    pub ptr: *mut c_void,
+    pub offset: usize,
+    pub start: usize,
+    pub select: usize,
+    pub disconnect: usize,
+    pub len: usize,
+    pub addrspace: *const c_char,
+}
+
+// The pointers are into the core's own memory, which moves with the core and is only
+// read on the thread that runs it.
+unsafe impl Send for MemoryDescriptor {}
+
+/// retro_memory_map
+#[repr(C)]
+pub struct MemoryMap {
+    pub descriptors: *const MemoryDescriptor,
+    pub num_descriptors: c_uint,
 }
 
 #[repr(C)]

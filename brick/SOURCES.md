@@ -42,3 +42,5 @@ v0.9: adaptive clock controller, unchanged-frame suppression, suspend verificati
 
 
 v0.10: original Rust Wi-Fi settings, keyboard, asynchronous firmware-service wrapper and supplicant control client. Protocol reference: https://w1.fi/wpa_supplicant/devel/ctrl_iface_page.html . Firmware helper/socket layout checked against the pinned NextUI skeleton/SYSTEM/tg5040/etc/wifi/wifi_init.sh. Password handling follows upstream wpa_config_parse_psk (literal bytes between first/last quotes). No NextUI networking UI, daemon or external Wi-Fi program is bundled.
+
+RetroAchievements: rcheevos v12.5.0 (https://github.com/RetroAchievements/rcheevos, MIT) is vendored, unmodified apart from leaving out disc, archive and encryption hashing, in crates/slot-cheevos/rcheevos (see its VERSION); its licence ships as Slot/System/licenses/rcheevos-MIT.txt. libretro.h there is the libretro API header from the pinned gpSP source. The slot_cheevos.c shim, the HTTP(S) client (rustls with ring and webpki-roots, pinned by Cargo.lock) and the menus are original port additions. Protocol: dorequest.php `login2`, as used by rcheevos and RetroArch.

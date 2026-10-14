@@ -227,6 +227,20 @@ impl Session {
         self.bridge_link(|app| app.update(dt));
         if let Some(emu) = &self.emu {
             emu.set_volume(self.app.output_volume());
+            crate::badge::prefetch(&self.root, emu.take_badge_urls());
+            for notice in emu.take_achievement_notices() {
+                let badge = match &notice {
+                    slot_cheevos::Notice::Unlocked { badge, .. }
+                    | slot_cheevos::Notice::GameCompleted { badge, .. }
+                    | slot_cheevos::Notice::GameLoaded(Ok((_, badge))) => Some(badge.clone()),
+                    _ => None,
+                };
+                let badge = badge.and_then(|url| {
+                    crate::badge::prefetch(&self.root, vec![url.clone()]);
+                    crate::badge::path(&self.root, &url)
+                });
+                self.app.achievement_notice(notice, badge);
+            }
         }
         if let Some((client_id, transport)) = self.app.take_link_transport() {
             match &self.emu {
@@ -469,6 +483,15 @@ impl Session {
         };
         emu.set_volume(self.app.output_volume());
         emu.set_driven(self.driven);
+        // Logged in to RetroAchievements: this game earns achievements (softcore).
+        if let Some(account) = crate::ra::load(&self.root) {
+            let console = match platform {
+                Platform::Gba => slot_cheevos::Console::Gba,
+                Platform::Gb => slot_cheevos::Console::Gb,
+                Platform::Gbc => slot_cheevos::Console::Gbc,
+            };
+            emu.achievements(&account.user, &account.token, console);
+        }
         self.app.set_snapshot(Box::new(emu.snapshot()));
         self.emu = Some(emu);
     }

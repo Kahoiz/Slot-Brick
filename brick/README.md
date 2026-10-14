@@ -73,11 +73,27 @@ doesn't flash anything to the device.
 | Press `Power`      | Sleep / wake                           |
 | Hold `Power`       | Shut down, or exit to the stock OS     |
 
-**Cart art:** in **HOME → Wi-Fi**, connect to a network, then choose **GET CART ART**. Left / Right
-picks box art, title screens or in-game shots. Games with no label get one from the libretro
-thumbnail collection, matched by file name; labels you already have are never replaced.
-`Slot/Logs/cart-art.txt` lists each game and what it got. If a game isn't found, renaming
-the ROM to its No-Intro name, for example `Pokemon - Emerald Version (USA, Europe).gba`, helps.
+**Cart art:** connect to Wi-Fi, then open **HOME → Cart Art** (greyed out while Wi-Fi is off).
+**GET CART ART** gives every game with no label a scan of its real cartridge label; labels you
+already have are never replaced. The scans come from the slot art set behind
+[Cart Studio](https://studio.slot-cfw.fyi) (scans from ScreenScraper), downloaded over HTTPS.
+A game is found by the ROM's checksum, or for a trimmed or patched ROM by its file name
+(helped by the GBA game code in its header). ROM hacks and homebrew keep the label with their
+file name, so they never look like the game they are based on. Each ROM is read once and its
+checksum kept in `Slot/System/Cache/crc32.txt`.
+
+`Slot/Logs/cart-art.txt` lists each game and what it got. Below GET CART ART, every game with a
+label is listed: press A twice on one to delete its label, then GET CART ART fetches a new one.
+
+**RetroAchievements:** **HOME → RetroAchievements** logs in to your
+[RetroAchievements](https://retroachievements.org) account and tests the connection (it needs
+Wi-Fi). Your password is sent once, over HTTPS, and never stored: Slot keeps only the login
+token, in `Slot/Config/retroachievements.txt`; delete that file or choose **LOG OUT** to forget
+it. While logged in, games earn achievements in softcore mode (save states, rewind and
+fast-forward stay allowed): a small toast slides into the top-right corner with how many a
+game has when it starts, and with each unlock and its badge as it happens. A game's badges
+are fetched when it starts and kept in `Slot/System/Cache/Badges`. Unlocks made offline are sent once the Brick is back online, while the game is
+still running. Hardcore mode isn't available.
 
 **Auto-sleep:** the Brick sleeps after 5 minutes idle in menus or 15 minutes in a game.
 To turn this off, create an empty file named `Slot/DISABLE_AUTO_SLEEP`.

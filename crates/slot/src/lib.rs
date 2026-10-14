@@ -1,5 +1,6 @@
 pub mod app;
 pub mod audio;
+pub mod badge;
 pub mod bezel;
 pub mod bootlogo;
 pub mod build_info;
@@ -24,8 +25,10 @@ pub mod link_radio;
 pub mod link_screen;
 pub mod link_start;
 pub mod link_state;
+pub mod net;
 pub mod persist;
 pub mod prefetch;
+pub mod ra;
 pub mod resample;
 pub mod rewind;
 pub mod root;

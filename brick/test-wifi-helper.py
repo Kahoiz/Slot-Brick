@@ -29,7 +29,7 @@ class WifiHelperTests(unittest.TestCase):
         self.exe('wpa_supplicant', 'echo "wpa_supplicant $*" >> "$CALLS"\n' + BIND + '"$SOCKDIR"\n')
         # A DHCP client that would hang if the helper kept our pipes open.
         self.exe('udhcpc', 'echo "udhcpc $*" >> "$CALLS"\nexec sleep 30\n')
-        self.exe('wpa_cli', 'echo "wpa_cli $*" >> "$CALLS"\ncase "$*" in *ping) [ -f "$2/alive" ] && echo PONG;; esac\nexit 0\n')
+        self.exe('wpa_cli', 'echo "wpa_cli $*" >> "$CALLS"\ncase "$*" in *ping) [ -f "$2/alive" ] && echo PONG;; *terminate) rm -f "$2/alive";; esac\nexit 0\n')
         self.exe('pidof', 'exit 1\n')
     def tearDown(self):
         subprocess.run(['pkill', '-f', 'sleep 30'], check=False, stderr=subprocess.DEVNULL)
@@ -154,6 +154,38 @@ class WifiHelperTests(unittest.TestCase):
         finally:
             (self.root/'Logs').chmod(0o700)
         self.assertFalse((self.root/'Logs/wifi.log').exists())
+    def test_ensure_restarts_a_supplicant_started_with_the_radio_blocked(self):
+        # The Brick at boot: firmware supplicant answering, radio blocked, wlan0 down. It
+        # never recovers from that, so ensure restarts Wi-Fi like an off/on toggle.
+        (self.bin/'rfkill').unlink()
+        d = self.varrun/'wpa_supplicant'; d.mkdir(parents=True)
+        s = socket.socket(socket.AF_UNIX); s.bind(str(d/'wlan0')); (d/'alive').touch()
+        try:
+            code, took = self.helper('ensure', timeout=20)
+        finally:
+            s.close()
+        self.assertEqual(code, 0, self.log())
+        self.assertEqual(self.soft(), '0')
+        self.assertEqual((self.net/'wlan0/flags').read_text().strip(), '0x1003')
+        calls = self.lines()
+        self.assertIn('supplicant running with the radio off; restarting Wi-Fi', self.log())
+        self.assertTrue(any(c.endswith('terminate') for c in calls), calls)
+        self.assertTrue(any(c.startswith('wpa_supplicant -B') for c in calls), calls)
+        self.assertTrue(any(c.startswith('udhcpc -i wlan0') for c in calls), calls)
+    def test_ensure_keeps_a_healthy_supplicant(self):
+        (self.rfkill/'rfkill0/soft').write_text('0\n'); (self.net/'wlan0/flags').write_text('0x1003\n')
+        d = self.varrun/'wpa_supplicant'; d.mkdir(parents=True)
+        s = socket.socket(socket.AF_UNIX); s.bind(str(d/'wlan0')); (d/'alive').touch()
+        try:
+            self.assertEqual(self.helper('ensure')[0], 0, self.log())
+        finally:
+            s.close()
+        calls = self.lines()
+        self.assertFalse(any(c.startswith('wpa_supplicant') or c.endswith('terminate') for c in calls), calls)
+        self.assertTrue(any(c.startswith('udhcpc -i wlan0') for c in calls), calls)
+    def test_ensure_without_a_supplicant_does_nothing(self):
+        self.assertEqual(self.helper('ensure')[0], 1)
+        self.assertEqual(self.soft(), '1')
     def test_bad_verb(self):
         self.assertEqual(self.helper('restart')[0], 2)
 
