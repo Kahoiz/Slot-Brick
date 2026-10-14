@@ -99,6 +99,10 @@ fn open_named(
         }
         match LibretroCore::open_with(path, &bios, &saves) {
             Ok(mut opened) => {
+                if core == Core::Fceumm {
+                    let (w, h) = Platform::Nes.canvas();
+                    opened.set_canvas(w, h);
+                }
                 apply_core_options(
                     &mut opened,
                     core,
@@ -125,7 +129,8 @@ pub fn palette_for(
     rom: &Path,
     link: Option<u8>,
 ) -> Option<GbPalette> {
-    chosen.filter(|_| link.is_none() && platform != Platform::Gba && dmg_only(rom))
+    let game_boy = matches!(platform, Platform::Gb | Platform::Gbc);
+    chosen.filter(|_| link.is_none() && game_boy && dmg_only(rom))
 }
 
 pub fn dmg_only(rom: &Path) -> bool {
@@ -155,6 +160,8 @@ pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static st
             "gpsp_color_correction",
             if on { "enabled" } else { "disabled" },
         )),
+        // A NES draws through its palette, with no LCD to correct for.
+        Core::Fceumm => None,
     }
 }
 
@@ -175,7 +182,20 @@ pub fn apply_core_options(
     colour: bool,
     palette: Option<GbPalette>,
 ) {
-    core.set_option(&format!("{}_frameskip", which.as_str()), "auto");
+    if which != Core::Fceumm {
+        core.set_option(&format!("{}_frameskip", which.as_str()), "auto");
+    }
+    if which == Core::Fceumm {
+        // 8 lines off the top and bottom, as a TV hid them: the 256x224 Platform::Nes draws.
+        for (key, value) in [
+            ("fceumm_overscan_v_top", "8"),
+            ("fceumm_overscan_v_bottom", "8"),
+            ("fceumm_overscan_h_left", "0"),
+            ("fceumm_overscan_h_right", "0"),
+        ] {
+            core.set_option(key, value);
+        }
+    }
     if which == Core::Mgba {
         core.set_option("mgba_sgb_borders", "OFF");
         core.set_option("mgba_force_gbp", "ON");

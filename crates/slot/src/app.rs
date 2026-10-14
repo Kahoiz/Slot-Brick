@@ -736,6 +736,12 @@ impl App {
         }
     }
 
+    pub fn set_nes_cart_shadow(&mut self, face: TexId) {
+        for (_, shelf) in &mut self.shelves {
+            shelf.set_nes_shadow(face);
+        }
+    }
+
     pub fn set_gb_cart_shadows(&mut self, notched: TexId, rounded: TexId) {
         for (_, shelf) in &mut self.shelves {
             shelf.set_gb_shadow(GbShell::Notched, notched);
@@ -1021,9 +1027,15 @@ impl App {
         self.state.rewind
     }
 
+    /// The canvas the running core draws into.
+    pub fn canvas(&self) -> (u32, u32) {
+        self.platform.canvas()
+    }
+
     pub fn picture_rect(&self) -> [f32; 4] {
         let (w, h) = self.platform.picture();
-        let (sw, sh) = (slot_gfx::SRC_W as f32, slot_gfx::SRC_H as f32);
+        let (sw, sh) = self.platform.canvas();
+        let (sw, sh) = (sw as f32, sh as f32);
         let (x, y) = ((sw - w as f32) / 2.0, (sh - h as f32) / 2.0);
         [x / sw, y / sh, (x + w as f32) / sw, (y + h as f32) / sh]
     }
@@ -1141,6 +1153,7 @@ impl App {
         match self.platform {
             Platform::Gba => self.state.shader_gba,
             Platform::Gb | Platform::Gbc => self.state.shader_gb,
+            Platform::Nes => self.state.shader_nes,
         }
     }
 
@@ -1561,6 +1574,7 @@ impl App {
         let (shader, choices) = match self.platform {
             Platform::Gba => (&mut self.state.shader_gba, &Shader::GBA[..]),
             Platform::Gb | Platform::Gbc => (&mut self.state.shader_gb, &Shader::GB[..]),
+            Platform::Nes => (&mut self.state.shader_nes, &Shader::NES[..]),
         };
         *shader = shader.step(choices, right);
         let said = match *shader {
@@ -1610,6 +1624,11 @@ impl App {
             return true;
         }
         if action == Action::ColourCorrectionToggle {
+            // A NES draws through its palette: there is no LCD colour to correct.
+            if self.platform == Platform::Nes && matches!(self.phase, Phase::Playing { .. }) {
+                self.refuse();
+                return true;
+            }
             self.change_setting(QuickRow::ColourCorrection, true);
             let said = match self.state.colour_correction {
                 true => Toast::ColourOn,

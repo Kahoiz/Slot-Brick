@@ -6,6 +6,9 @@ use crate::rumble::Rumble;
 
 pub const GBA_W: u32 = 240;
 pub const GBA_H: u32 = 160;
+/// A NES frame's largest size; FCEUmm crops overscan inside it.
+pub const NES_W: u32 = 256;
+pub const NES_H: u32 = 240;
 
 #[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 pub struct ButtonMask(pub u16);
@@ -83,6 +86,10 @@ pub trait RetroCore: Send {
     }
     fn set_option(&mut self, _key: &str, _value: &str) {}
     fn set_frame_skip(&mut self, _skip: bool) {}
+    /// The frame canvas `video_xrgb8888` fills, smaller pictures centred in it.
+    fn canvas(&self) -> (u32, u32) {
+        (GBA_W, GBA_H)
+    }
     fn video_xrgb8888(&self) -> &[u8];
     fn take_audio(&mut self) -> Vec<i16>;
     fn serialize(&mut self) -> Result<Vec<u8>, CoreError>;

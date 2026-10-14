@@ -157,3 +157,22 @@ fn the_same_stem_on_two_platforms_is_two_carts_with_two_labels() {
         "the GBA cart borrowed the Game Boy label"
     );
 }
+
+#[test]
+fn nes_roms_fill_their_own_shelf_and_read_no_game_boy_title() {
+    let d = tempfile::tempdir().unwrap();
+    for sub in ["Games/NES", "Games/GB"] {
+        std::fs::create_dir_all(d.path().join(sub)).unwrap();
+    }
+    let mut rom = b"NES\x1a".to_vec();
+    rom.resize(0x200, 0x41);
+    std::fs::write(d.path().join("Games/NES/Zelda (USA).nes"), &rom).unwrap();
+    std::fs::write(d.path().join("Games/NES/notes.txt"), "hi").unwrap();
+    std::fs::write(d.path().join("Games/GB/Zelda.nes"), &rom).unwrap();
+    let carts = slot_store::scan(d.path()).unwrap();
+    assert_eq!(carts.len(), 1, "{carts:?}");
+    let mut zelda = carts[0].clone();
+    assert_eq!((zelda.platform, zelda.stem.as_str()), (slot_store::Platform::Nes, "Zelda (USA)"));
+    zelda.read_header();
+    assert_eq!((zelda.title.as_str(), zelda.code.as_str()), ("", ""));
+}

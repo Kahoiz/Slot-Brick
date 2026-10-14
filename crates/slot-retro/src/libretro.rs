@@ -24,6 +24,8 @@ enum PixelFormat {
 
 struct Host {
     video: Vec<u8>,
+    /// The canvas `video` holds, GBA-sized unless set_canvas says otherwise.
+    canvas: (u32, u32),
     format: PixelFormat,
     audio: Vec<i16>,
     inputs: [u16; 2],
@@ -332,16 +334,17 @@ unsafe extern "C" fn video_refresh(
         return;
     }
     with_host(|h| {
-        let cols = width.min(GBA_W) as usize;
-        let rows = height.min(GBA_H) as usize;
-        let ox = (GBA_W as usize - cols) / 2;
-        let oy = (GBA_H as usize - rows) / 2;
-        if cols != GBA_W as usize || rows != GBA_H as usize {
+        let (cw, ch) = h.canvas;
+        let cols = width.min(cw) as usize;
+        let rows = height.min(ch) as usize;
+        let ox = (cw as usize - cols) / 2;
+        let oy = (ch as usize - rows) / 2;
+        if cols != cw as usize || rows != ch as usize {
             h.video.fill(0);
         }
         for y in 0..rows {
             let src = (data as *const u8).add(y * pitch);
-            let row = ((y + oy) * GBA_W as usize + ox) * 4;
+            let row = ((y + oy) * cw as usize + ox) * 4;
             match h.format {
                 PixelFormat::Xrgb8888 => {
                     ptr::copy_nonoverlapping(src, h.video.as_mut_ptr().add(row), cols * 4);
@@ -438,6 +441,12 @@ impl LibretroCore {
         self.host.asked_for_rumble
     }
 
+    /// The canvas frames are drawn into, before the game loads: a NES needs 256x240.
+    pub fn set_canvas(&mut self, w: u32, h: u32) {
+        self.host.canvas = (w, h);
+        self.host.video = vec![0; (w * h * 4) as usize];
+    }
+
     pub fn set_option(&mut self, key: &str, value: &str) {
         if !self.host.declared.is_empty() {
             match self.host.declared.get(key) {
@@ -484,6 +493,7 @@ impl LibretroCore {
         }
         let mut host = Box::new(Host {
             video: vec![0; VIDEO_BYTES],
+            canvas: (GBA_W, GBA_H),
             format: PixelFormat::Xrgb8888,
             audio: Vec::new(),
             inputs: [0; 2],
@@ -619,6 +629,10 @@ impl RetroCore for LibretroCore {
         unsafe { report_audio_status(skip) };
     }
 
+    fn canvas(&self) -> (u32, u32) {
+        self.host.canvas
+    }
+
     fn video_xrgb8888(&self) -> &[u8] {
         &self.host.video
     }
@@ -729,6 +743,7 @@ mod tests {
     fn host_with(options: HashMap<String, CString>, options_dirty: bool) -> Box<Host> {
         Box::new(Host {
             video: vec![0; VIDEO_BYTES],
+            canvas: (GBA_W, GBA_H),
             format: PixelFormat::Xrgb8888,
             audio: Vec::new(),
             inputs: [0; 2],

@@ -61,6 +61,37 @@ fn a_token_logs_in_and_a_rom_is_identified_by_its_hash() {
 }
 
 #[test]
+fn a_nes_rom_is_hashed_without_its_ines_header() {
+    let fake = Arc::new(Fake::default());
+    let c = Cheevos::new(fake.clone()).unwrap();
+    c.login("Benni", "t0k3n");
+    wait(&c, |n| matches!(n, Notice::LoggedIn(_)));
+    let d = tempfile::tempdir().unwrap();
+    let rom = d.path().join("game.nes");
+    let mut bytes = b"NES\x1a\x01\x01\0\0\0\0\0\0\0\0\0\0".to_vec();
+    bytes.extend((0..=255u8).cycle().take(1024));
+    std::fs::write(&rom, bytes).unwrap();
+    c.load_game(&rom, Console::Nes);
+    wait(&c, |n| matches!(n, Notice::GameLoaded(_)));
+    let seen = fake.seen.lock().unwrap();
+    // The same 1024 bytes as the GBA ROM above: the 16-byte header is not hashed.
+    assert!(seen.iter().any(|p| p.contains("b2ea9f7fcea831a4a63b213f41a8855b")), "{seen:?}");
+}
+
+#[test]
+fn core_memory_is_mapped_for_a_nes() {
+    let mut c = Cheevos::new(Arc::new(Fake::default())).unwrap();
+    let mut ram = vec![0u8; 0x800];
+    let mapped = unsafe {
+        c.set_memory(std::ptr::null(), 0, Console::Nes, &mut |id| match id {
+            2 => Some((ram.as_mut_ptr(), ram.len())),
+            _ => None,
+        })
+    };
+    assert!(mapped >= 0x800, "{mapped}");
+}
+
+#[test]
 fn a_refused_token_says_so() {
     struct No;
     impl Http for No {

@@ -11,6 +11,7 @@
   - `PAKS.md`: tools package directory convention.
 - mGBA: https://github.com/libretro/mgba/tree/e31759b24e7a4e3899285ff720d7b573ac328ae7; MPL-2.0. Original source archive and upstream slot patches included.
 - gpSP: https://github.com/libretro/gpsp/tree/7b2dd37394e2822110cacef321e9bb291a305b77; GPL-2.0, with per-file notices. Original source archive, upstream slot patch, and extra assembler patch included.
+- FCEUmm: https://github.com/libretro/libretro-fceumm/tree/7a542dab1e87679921962a9f056186eca425c0c2; GPL-2.0. Unmodified; source archive `vendor/fceumm-src.tar.gz`, built with its `rpi3_64` (Cortex-A53) target by `brick/build-cores.sh`. Licence ships as `Slot/System/licenses/fceumm-GPL-2.0.txt`.
 
 Port additions are GPL-3.0-or-later as part of slot. Rust dependencies are pinned by Cargo.lock. Core and asset notices are in the original source and the runtime `Slot/System/licenses` directory.
 

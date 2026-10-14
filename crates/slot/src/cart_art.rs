@@ -104,7 +104,8 @@ fn run(
     let carts: Vec<Cart> = scan(root)
         .map_err(|e| format!("Cannot read games: {e}"))?
         .into_iter()
-        .filter(|c| c.label.is_none())
+        // The label set has no NES scans: those carts keep their file-name labels.
+        .filter(|c| c.label.is_none() && c.platform != Platform::Nes)
         .collect();
     let mut summary = Summary::default();
     let mut report = String::new();
@@ -177,6 +178,7 @@ fn platforms_for(platform: Platform) -> &'static [Platform] {
         Platform::Gba => &[Platform::Gba],
         Platform::Gb => &[Platform::Gb, Platform::Gbc],
         Platform::Gbc => &[Platform::Gbc, Platform::Gb],
+        Platform::Nes => &[Platform::Nes],
     }
 }
 
@@ -789,6 +791,20 @@ mod tests {
                 (0x0006_612D, "GB/support-texture/0006612D.png".to_string()),
             ]
         );
+    }
+
+    #[test]
+    fn nes_carts_are_left_alone_as_the_label_set_has_none() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let path = root.join("Games/NES/Zelda (USA).nes");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"NES\x1a").unwrap();
+        std::fs::create_dir_all(root.join("Logs")).unwrap();
+        // An unreachable server: nothing may even ask it.
+        let (got, done) = drain(&ArtJob::start_at(root.to_path_buf(), "http://127.0.0.1:1".into()));
+        assert_eq!((got.len(), done), (0, Ok(Summary::default())));
+        assert!(!root.join(CRC_CACHE).exists(), "the NES ROM was read");
     }
 
     #[test]

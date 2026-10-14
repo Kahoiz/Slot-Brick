@@ -52,6 +52,22 @@ pub const DUAL_MODE_SHELL: Shell = shell([0x33, 0x30, 0x31], Finish::Solid);
 
 pub const GB_CLEAR_SHELL: Shell = shell([0x7c, 0x7a, 0x8a], Finish::Translucent);
 
+/// Every NES cart's grey.
+pub const NES_SHELL: Shell = shell([0x8e, 0x8d, 0x8a], Finish::Solid);
+
+/// Famicom carts came in many plastics. A Japanese release wears one of them, picked
+/// steadily from its name: a colour in the spirit of the Famicom, not its real one.
+pub const FAMICOM_SHELLS: [Shell; 8] = [
+    shell([0xe3, 0xb9, 0x2d], Finish::Solid),
+    shell([0xbf, 0x32, 0x2d], Finish::Solid),
+    shell([0x2f, 0x5a, 0xab], Finish::Solid),
+    shell([0x3b, 0x8c, 0x4c], Finish::Solid),
+    shell([0x2b, 0x2a, 0x2e], Finish::Solid),
+    shell([0xe6, 0xe2, 0xd6], Finish::Solid),
+    shell([0xdc, 0x78, 0x2b], Finish::Solid),
+    shell([0xe2, 0x8c, 0xa9], Finish::Solid),
+];
+
 const GB_CODES: &[(&str, Shell)] = &[
     ("AAU", shell([0xb3, 0x8b, 0x3a], Finish::Solid)),
     ("AAUJ", DUAL_MODE_SHELL),
@@ -88,7 +104,28 @@ pub fn shell_for(cart: &Cart) -> Shell {
     match cart.platform {
         Platform::Gba => gba_shell_for(&cart.code),
         Platform::Gb | Platform::Gbc => gb_shell_for(&cart.rom),
+        Platform::Nes => nes_shell_for(&cart.stem),
     }
+}
+
+/// A Famicom plastic for a ROM named as a Japanese release, NES grey for the rest.
+pub fn nes_shell_for(stem: &str) -> Shell {
+    if !japanese(stem) {
+        return NES_SHELL;
+    }
+    // FNV-1a: the same name always gets the same plastic.
+    let hash = stem
+        .bytes()
+        .fold(0x811c_9dc5u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193));
+    FAMICOM_SHELLS[hash as usize % FAMICOM_SHELLS.len()]
+}
+
+/// No-Intro "(Japan)" or "(Japan, USA)", GoodTools "(J)".
+fn japanese(stem: &str) -> bool {
+    stem.split(['(', '['])
+        .skip(1)
+        .filter_map(|t| t.split([')', ']']).next())
+        .any(|tag| tag == "J" || tag.split(',').any(|r| r.trim() == "Japan"))
 }
 
 pub fn gba_shell_for(code: &str) -> Shell {
@@ -187,6 +224,7 @@ pub fn shell_presets() -> Vec<(&'static str, Shell)> {
         ("Game Boy black", DUAL_MODE_SHELL),
         ("Game Boy Color clear", GB_CLEAR_SHELL),
         ("Advance charcoal", DEFAULT_SHELL),
+        ("NES grey", NES_SHELL),
         ("Advance Video grey", FAMILY[0].1),
     ];
     out.extend(
