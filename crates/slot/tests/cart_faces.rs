@@ -74,3 +74,21 @@ fn faces_far_from_the_cursor_are_shed_and_near_ones_kept() {
     assert_eq!(shed, vec![TexId::from_raw(3), TexId::from_raw(4)]);
     assert!(app.shed_faces().is_empty());
 }
+
+#[test]
+fn a_scanned_gba_cart_wears_its_games_plastic_on_the_shelf() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("Games/GBA")).unwrap();
+    let mut rom = vec![0u8; 0x100];
+    rom[0xa0..0xa0 + 11].copy_from_slice(b"DRILL DOZER");
+    rom[0xac..0xb0].copy_from_slice(b"V49E");
+    std::fs::write(d.path().join("Games/GBA/Drill Dozer.gba"), rom).unwrap();
+    let mut cart = slot_store::scan(d.path()).unwrap().remove(0);
+    assert!(cart.code.is_empty(), "the scan reads no headers");
+    let face = slot::cart_faces::shelf_face(d.path(), &mut cart);
+    let mut read = cart.clone();
+    read.read_header();
+    assert!(face.rgba == slot_ui::cart_face(&read).rgba, "the shelf face ignores the game code");
+    let grey = Cart { code: String::new(), ..read };
+    assert!(face.rgba != slot_ui::cart_face(&grey).rgba, "Drill Dozer's red is the default grey");
+}

@@ -122,7 +122,7 @@ impl Drop for CartFaces {
 fn work(queue: &Shared, outbox: &Sender<(Key, CartFace)>, root: &Path) {
     let (lock, wake) = &**queue;
     loop {
-        let (key, cart) = {
+        let (key, mut cart) = {
             let mut q = lock.lock().unwrap_or_else(|e| e.into_inner());
             loop {
                 if q.closed {
@@ -134,9 +134,16 @@ fn work(queue: &Shared, outbox: &Sender<(Key, CartFace)>, root: &Path) {
                 q = wake.wait(q).unwrap_or_else(|e| e.into_inner());
             }
         };
-        let face = cart_face_with(&cart, label_art(root, &cart));
+        let face = shelf_face(root, &mut cart);
         if outbox.send((key, face)).is_err() {
             return;
         }
     }
+}
+
+/// A shelf cart's face. The library scan leaves ROM headers unread (1.6.0), and a GBA
+/// cart's plastic comes from its game code, so the header is read here, off the UI thread.
+pub fn shelf_face(root: &Path, cart: &mut Cart) -> CartFace {
+    cart.read_header();
+    cart_face_with(cart, label_art(root, cart))
 }

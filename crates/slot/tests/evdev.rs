@@ -195,6 +195,7 @@ fn no_trace_file_is_written_unless_one_was_asked_for() {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick reads its pad through SDL and leaves evdev polling alone")]
 fn the_pad_is_polled_as_fast_as_the_kernel_tick_allows() {
     let d = input_tree();
     let sys = d.path().join("sys/class/input");

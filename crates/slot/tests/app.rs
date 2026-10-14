@@ -1260,6 +1260,7 @@ fn let_it_open(app: &mut App) {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick lays out its own legend")]
 fn the_open_cart_rests_over_the_shelf_with_its_lid_turned() {
     let (_d, mut app) = on_shelf(&["Emerald", "Zzz"]);
     let f = fake_picker_faces(&mut app);
@@ -1806,6 +1807,7 @@ fn pad(s: &Session) -> u16 {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick pads actual size out to 4:3")]
 fn l_and_r_change_the_mode_on_a_game_boy_cart_and_not_on_a_gba_one() {
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
     let mut s = session_playing(d.path());
@@ -1910,6 +1912,7 @@ fn a_shoulder_still_held_when_the_cart_seats_never_reaches_a_game_boy_core() {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick pads actual size out to 4:3")]
 fn the_picture_mode_is_remembered_per_cart() {
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
     let mut s = session_playing(d.path());
@@ -1935,6 +1938,7 @@ fn the_picture_mode_is_remembered_per_cart() {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick pads actual size out to 4:3")]
 fn a_cart_with_no_line_reads_as_actual_size() {
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
     assert!(
@@ -1949,6 +1953,20 @@ fn a_cart_with_no_line_reads_as_actual_size() {
         WHOLE_TEXTURE,
         "a cart with no line did not open at actual size"
     );
+}
+
+#[test]
+#[cfg(feature = "brick")]
+fn on_the_brick_a_cart_with_no_line_opens_at_actual_size_in_4_3() {
+    let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);
+    assert_eq!(video_mode_for(d.path(), "Tetris"), VideoMode::Actual);
+    let s = session_playing(d.path());
+    assert_eq!(
+        s.app().source_rect(),
+        slot::video_mode::source_rect(slot_store::Platform::Gb, VideoMode::Actual),
+        "a cart with no line did not open at actual size"
+    );
+    assert_ne!(s.app().source_rect(), WHOLE_TEXTURE, "actual size is padded to 4:3");
 }
 
 #[test]
@@ -2245,6 +2263,7 @@ fn the_shader_shortcut_does_nothing_in_the_save_state_switcher() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "brick"), ignore = "3:2 and full screen are the Brick's picture modes")]
 fn home_x_toggles_a_gba_cart_between_3_2_and_full_screen_and_remembers_it() {
     let d = common::tmp_root_with_carts(&["Emerald", "Fusion"]);
     let mut s = session_playing(d.path());
