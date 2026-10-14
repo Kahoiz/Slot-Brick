@@ -6,7 +6,7 @@
   HTTPS). Existing labels are never replaced. Labels can be deleted there one by one. Trimmed or patched ROMs are found
   by file name and GBA game code; ROM hacks never get their base game's label.
 - The Wi-Fi keyboard is QWERTY under a number row, and briefly shows the last character typed.
-- New HOME > RetroAchievements: log in, test the connection, log out. Over HTTPS (rustls);
+- New HOME > RetroAchievements (greyed out while Wi-Fi is off): log in, test the connection, log out. Over HTTPS (rustls);
   only the login token is kept. While logged in, games earn achievements (softcore), with a
   small corner toast for the game's count and each unlock, with its badge like Steam's. Built on rcheevos 12.5 (MIT), vendored in
   crates/slot-cheevos.

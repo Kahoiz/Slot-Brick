@@ -491,8 +491,8 @@ fn the_legend_says_change_on_a_value_row_and_open_on_a_row_that_opens() {
     for row in QuickRow::MAIN {
         assert_eq!(a.quick_menu(), Some(row));
         let out = frame(&a);
-        // Cart Art is greyed out with no Wi-Fi, as here: it offers only BACK.
-        let usable = row != QuickRow::CartArt;
+        // Cart Art and RetroAchievements are greyed out with no Wi-Fi, as here: only BACK.
+        let usable = !matches!(row, QuickRow::CartArt | QuickRow::Achievements);
         assert!(drawn(&out, 400), "no B BACK on {row:?}");
         assert_eq!(drawn(&out, 401), !row.opens(), "CHANGE on {row:?}");
         assert_eq!(drawn(&out, 402), row.opens() && usable, "OPEN on {row:?}");
@@ -502,12 +502,14 @@ fn the_legend_says_change_on_a_value_row_and_open_on_a_row_that_opens() {
 
 #[cfg(feature="brick")]
 #[test]
-fn cart_art_does_nothing_while_wifi_is_off() {
-    let (_d, mut a, _) = on_carousel();
-    open_at(&mut a, QuickRow::CartArt);
-    press(&mut a, Btn::A);
-    assert!(!a.overlay_open(), "no overlay opened");
-    assert_eq!(a.quick_menu(), Some(QuickRow::CartArt));
+fn cart_art_and_retroachievements_do_nothing_while_wifi_is_off() {
+    for row in [QuickRow::CartArt, QuickRow::Achievements] {
+        let (_d, mut a, _) = on_carousel();
+        open_at(&mut a, row);
+        press(&mut a, Btn::A);
+        assert!(!a.overlay_open(), "{row:?} opened its overlay");
+        assert_eq!(a.quick_menu(), Some(row));
+    }
 }
 
 #[test]
