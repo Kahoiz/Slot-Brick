@@ -267,14 +267,14 @@ impl Frontend {
             carets,
             legend,
         });
-        let sockets = slot_store::Core::ALL
+        let sockets = slot_store::Core::PICKER
             .iter()
             .map(|c| {
                 let f = socket_face(*c);
                 compositor.create_texture(f.w, f.h, &f.rgba)
             })
             .collect();
-        let chips = slot_store::Core::ALL
+        let chips = slot_store::Core::PICKER
             .iter()
             .map(|c| {
                 let f = chip_face(Some(*c));
@@ -339,6 +339,9 @@ impl Frontend {
         let rounded = gb_cart_shadow(GbShell::Rounded);
         let rounded = compositor.create_texture(rounded.w, rounded.h, &rounded.rgba);
         self.session.app_mut().set_gb_cart_shadows(notched, rounded);
+        let nes = slot_ui::nes_cart_shadow();
+        let nes = compositor.create_texture(nes.w, nes.h, &nes.rgba);
+        self.session.app_mut().set_nes_cart_shadow(nes);
         let bolt = icon_face(Icon::Charging, BOLT_PX, HUD_INK);
         let bolt_id = compositor.create_texture(bolt.w, bolt.h, &bolt.rgba);
         self.session.app_mut().set_bolt_face(bolt_id);
@@ -426,6 +429,8 @@ impl Frontend {
         compositor.set_screen_power(self.session.app().screen_power());
         compositor.set_frame_lift(self.session.app().frame_lift());
         compositor.set_frame_split(self.session.app().frame_split());
+        let (cw, ch) = self.session.app().canvas();
+        compositor.set_game_canvas(cw, ch);
         compositor.set_game_source_rect(self.session.app().source_rect());
         compositor.begin_frame();
         if self.draw_rebuild(compositor) {

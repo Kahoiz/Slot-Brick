@@ -489,6 +489,7 @@ impl Session {
                 Platform::Gba => slot_cheevos::Console::Gba,
                 Platform::Gb => slot_cheevos::Console::Gb,
                 Platform::Gbc => slot_cheevos::Console::Gbc,
+                Platform::Nes => slot_cheevos::Console::Nes,
             };
             emu.achievements(&account.user, &account.token, console);
         }

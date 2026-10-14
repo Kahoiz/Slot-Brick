@@ -52,6 +52,7 @@ pub struct Shelf {
     shadow: Option<TexId>,
     gb_shadow: Option<TexId>,
     gbc_shadow: Option<TexId>,
+    nes_shadow: Option<TexId>,
     shells: Vec<Option<GbShell>>,
     ride: f32,
     vel: f32,
@@ -69,6 +70,7 @@ impl Shelf {
             shadow: None,
             gb_shadow: None,
             gbc_shadow: None,
+            nes_shadow: None,
             ride: 0.0,
             vel: 0.0,
             held: None,
@@ -91,6 +93,10 @@ impl Shelf {
             GbShell::Notched => self.gb_shadow = Some(face),
             GbShell::Rounded => self.gbc_shadow = Some(face),
         }
+    }
+
+    pub fn set_nes_shadow(&mut self, face: TexId) {
+        self.nes_shadow = Some(face);
     }
 
     pub fn set_faces(&mut self, faces: Vec<TexId>) {
@@ -335,6 +341,7 @@ impl Shelf {
             let y = foot_y(ch as f32) - h;
             if alpha < 1.0 {
                 let backing = match self.shells.get(i).copied().flatten() {
+                    None if cart.platform == slot_store::Platform::Nes => self.nes_shadow,
                     None => self.shadow,
                     Some(GbShell::Notched) => self.gb_shadow,
                     Some(GbShell::Rounded) => self.gbc_shadow,

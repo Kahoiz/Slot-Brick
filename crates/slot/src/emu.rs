@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::cable::{self, Cable};
 use slot_retro::{
-    ButtonMask, Link, LinkChannel, RetroCore, Rumble, GBA_H, GBA_W, NETPACKET_RELIABLE,
+    ButtonMask, Link, LinkChannel, RetroCore, Rumble, NETPACKET_RELIABLE,
 };
 
 use crate::audio::Ring;
@@ -154,7 +154,8 @@ impl EmuHandle {
     ) -> Self {
         let rumble = core.rumble();
         let link = core.net();
-        let frames = Frames::new((GBA_W * GBA_H * 4) as usize);
+        let (cw, ch) = core.canvas();
+        let frames = Frames::new((cw * ch * 4) as usize);
         let shared = Arc::new(Shared {
             input: AtomicU16::new(0),
             speed: AtomicU8::new(Speed::Paused as u8),
@@ -947,7 +948,7 @@ impl Worker {
                 let _ = reply.send(core.save_ram());
             }
             Cmd::Thumb(reply) => {
-                let _ = reply.send(crate::thumb::png(core.video_xrgb8888()));
+                let _ = reply.send(crate::thumb::png(core.video_xrgb8888(), core.canvas()));
             }
             Cmd::BeginLink(client_id, t) => {
                 self.shared.link_lost.store(false, Ordering::Relaxed);

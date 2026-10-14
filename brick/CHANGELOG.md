@@ -1,6 +1,10 @@
 # Changelog — Slot. for TrimUI Brick
 
 ## Unreleased
+- NES: `.nes` ROMs in `Slot/Games/NES` get a shelf of NES cartridges (grey; Famicom colours for
+  Japanese releases) and run on FCEUmm (GPL-2.0), with save states, rewind, fast-forward and
+  RetroAchievements. The emulator picture canvas is now sized per system (256x240 for NES); the
+  Game Boys and GBA are unchanged.
 - New HOME > Cart Art (greyed out while Wi-Fi is off): GET CART ART gives games with no label a
   real cartridge label scan (by ROM checksum, from the slot art set behind Cart Studio, over
   HTTPS). Existing labels are never replaced. Labels can be deleted there one by one. Trimmed or patched ROMs are found
