@@ -172,6 +172,7 @@ fn dump(px: &[u8], name: &str) {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick draws the slot from pre-rendered art, not colour bands")]
 fn the_host_picks_a_purple_plug_over_the_port() {
     let px = render(
         GameMenu::Pick(LinkRow::Host),
@@ -223,6 +224,7 @@ fn a_wireless_link_seats_the_adapter_with_its_label_plate() {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick draws the slot from pre-rendered art, not colour bands")]
 fn a_failed_plug_leaves_where_it_waited() {
     let working = GameMenu::Working {
         role: LinkRow::Host,
@@ -248,6 +250,7 @@ fn a_failed_plug_leaves_where_it_waited() {
 const GROUND: [u8; 3] = [0x05, 0x05, 0x08];
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick draws the slot from pre-rendered art, not colour bands")]
 fn ending_a_link_pulls_the_plug_back_out_of_the_port() {
     let menu = GameMenu::Unplug {
         role: LinkRow::Host,

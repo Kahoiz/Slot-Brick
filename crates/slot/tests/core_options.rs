@@ -56,7 +56,8 @@ fn every_option_is_one_the_core_has(core: &LibretroCore, what: &str) {
 fn every_option_slot_sets_is_one_the_core_declares() {
     let _g = common::core_lock();
     let mut ran = 0;
-    for which in Core::ALL {
+    // FCEUmm declares its options only once a game loads: fceumm.rs checks it there.
+    for which in Core::ALL.into_iter().filter(|c| *c != Core::Fceumm) {
         let path = dylib_for(which);
         if !path.exists() {
             eprintln!("no {} dylib on this host, skipping", which.as_str());

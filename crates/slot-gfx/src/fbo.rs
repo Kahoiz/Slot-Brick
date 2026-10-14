@@ -94,6 +94,11 @@ impl Compositor {
         }
     }
 
+    /// The emulator's frame canvas (Platform::canvas); GBA-sized until set.
+    pub fn set_game_canvas(&mut self, w: u32, h: u32) {
+        self.game.set_canvas(w, h);
+    }
+
     pub fn upload_game(&mut self, xrgb8888: &[u8]) {
         self.game.upload(xrgb8888);
     }

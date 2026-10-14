@@ -10,15 +10,19 @@ pub enum Core {
     #[default]
     Mgba,
     Gpsp,
+    Fceumm,
 }
 
 impl Core {
-    pub const ALL: [Core; 2] = [Core::Mgba, Core::Gpsp];
+    pub const ALL: [Core; 3] = [Core::Mgba, Core::Gpsp, Core::Fceumm];
+    /// The GBA's choice of cores, the picker board's two sockets (in Core::index order).
+    pub const PICKER: [Core; 2] = [Core::Mgba, Core::Gpsp];
 
     pub fn as_str(&self) -> &'static str {
         match self {
             Core::Mgba => "mgba",
             Core::Gpsp => "gpsp",
+            Core::Fceumm => "fceumm",
         }
     }
 
@@ -30,6 +34,7 @@ impl Core {
         match self {
             Core::Mgba => "mGBA",
             Core::Gpsp => "gpSP",
+            Core::Fceumm => "FCEUmm",
         }
     }
 
@@ -37,20 +42,23 @@ impl Core {
         match s.trim().to_ascii_lowercase().as_str() {
             "mgba" => Some(Core::Mgba),
             "gpsp" => Some(Core::Gpsp),
+            "fceumm" => Some(Core::Fceumm),
             _ => None,
         }
     }
 
     pub fn runs(self, platform: Platform) -> bool {
         match self {
-            Core::Mgba => true,
+            Core::Mgba => platform != Platform::Nes,
             Core::Gpsp => platform == Platform::Gba,
+            Core::Fceumm => platform == Platform::Nes,
         }
     }
 
     pub fn default_for(platform: Platform) -> Core {
         match platform {
             Platform::Gba | Platform::Gb | Platform::Gbc => Core::Mgba,
+            Platform::Nes => Core::Fceumm,
         }
     }
 }

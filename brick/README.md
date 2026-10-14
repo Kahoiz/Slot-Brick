@@ -1,7 +1,7 @@
 # Slot. for TrimUI Brick — v0.23
 
 An unofficial port of **Slot.**, Brandon T. Kowalski's GB/GBC/GBA frontend for the Anbernic RG SP,
-to the **original TrimUI Brick** on stock firmware. Port by **LordNordyx**.
+to the **original TrimUI Brick** on stock firmware, with NES added. Port by **LordNordyx**.
 
 > **Note:** Report problems at <https://github.com/LordNordyx/slot-brick>, not to the upstream project.
 
@@ -38,10 +38,10 @@ doesn't flash anything to the device.
 | Button           | Action                                  |
 | ---------------- | --------------------------------------- |
 | `Left` / `Right` | Browse games                            |
-| `L1` / `R1`      | Switch between GB, GBC and GBA shelves  |
+| `L1` / `R1`      | Switch between GB, GBC, GBA, NES shelves |
 | Tap `A`          | Resume from the last save state         |
 | Hold `A`         | Start the game fresh                    |
-| `START`          | Choose the emulator core                |
+| `START`          | GBA: choose the emulator core           |
 | `HOME`           | Menu (settings, Wi-Fi, About)           |
 
 ### In game
@@ -56,11 +56,11 @@ doesn't flash anything to the device.
 | `SELECT + L1`               | Load the latest save state                          |
 | `SELECT + A` / `B`          | Next / previous shader                              |
 | `SELECT + X`                | GBA: 3:2 or 4:3 full screen (saved per game)        |
-| `SELECT + Y`                | Colour correction on / off                          |
+| `SELECT + Y`                | Colour correction on / off (not NES)                |
 | `SELECT + L2` / `R2`        | GB: previous / next colour palette                  |
 | `SELECT + Up` / `Down`      | Brightness                                          |
 | `SELECT + Left` / `Right`   | Blue light filter                                   |
-| `L1` / `R1`                 | GB/GBC: stretched / original picture                |
+| `L1` / `R1`                 | GB/GBC/NES: stretched / original picture            |
 | Hold `L2`                   | Rewind                                              |
 | Hold `R2`                   | Fast-forward (double-tap to lock it on)             |
 
@@ -72,6 +72,34 @@ doesn't flash anything to the device.
 | `Fn` slider        | Mute / unmute                          |
 | Press `Power`      | Sleep / wake                           |
 | Hold `Power`       | Shut down, or exit to the stock OS     |
+
+**NES:** put `.nes` ROMs in `Slot/Games/NES`; they get their own shelf of NES cartridges and run
+on FCEUmm. No BIOS is needed. NES carts are grey; a ROM named as a Japanese release, such as
+`Rockman (Japan).nes`, wears a coloured Famicom plastic instead (picked from its name, not the
+real cart's colour). Put a label picture in `Slot/Labels/NES` as for the other systems; Cart Art
+has no NES scans to fetch. The picture is the TV's 256 x 224, padded to 4:3 at actual size or
+stretched to fill the screen with `L1` / `R1`. RetroAchievements work for NES too.
+
+**Cart art:** connect to Wi-Fi, then open **HOME → Cart Art** (greyed out while Wi-Fi is off).
+**GET CART ART** gives every game with no label a scan of its real cartridge label; labels you
+already have are never replaced. The scans come from the slot art set behind
+[Cart Studio](https://studio.slot-cfw.fyi) (scans from ScreenScraper), downloaded over HTTPS.
+A game is found by the ROM's checksum, or for a trimmed or patched ROM by its file name
+(helped by the GBA game code in its header). ROM hacks and homebrew keep the label with their
+file name, so they never look like the game they are based on. Each ROM is read once and its
+checksum kept in `Slot/System/Cache/crc32.txt`.
+
+`Slot/Logs/cart-art.txt` lists each game and what it got. Below GET CART ART, every game with a
+label is listed: press A twice on one to delete its label, then GET CART ART fetches a new one.
+
+**RetroAchievements:** **HOME → RetroAchievements** (greyed out while Wi-Fi is off) logs in to
+your [RetroAchievements](https://retroachievements.org) account and tests the connection.
+Your password is sent once, over HTTPS, and never stored: Slot keeps only the login token, in `Slot/Config/retroachievements.txt`; delete that file or choose **LOG OUT** to forget
+it. While logged in, games earn achievements in softcore mode (save states, rewind and
+fast-forward stay allowed): a small toast slides into the top-right corner with how many a
+game has when it starts, and with each unlock and its badge as it happens. A game's badges
+are fetched when it starts and kept in `Slot/System/Cache/Badges`. Unlocks made offline are sent once the Brick is back online, while the game is
+still running. Hardcore mode isn't available.
 
 **Auto-sleep:** the Brick sleeps after 5 minutes idle in menus or 15 minutes in a game.
 To turn this off, create an empty file named `Slot/DISABLE_AUTO_SLEEP`.

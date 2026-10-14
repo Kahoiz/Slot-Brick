@@ -1,3 +1,8 @@
 target/
 brick/bootlogo-tool/target/
 __pycache__/
+target-docker/
+.docker-cache/
+dist-brick/
+brick/core-src/
+brick/core-build/

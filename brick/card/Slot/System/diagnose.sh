@@ -34,6 +34,9 @@ OUT="${1:-./slot-diagnostics.txt}"
     for b in wpa_supplicant wpa_cli udhcpc hostapd rfkill rfkill.elf; do
         printf '%s: ' "$b"; command -v "$b" || echo missing
     done
+    for r in /sys/class/rfkill/rfkill*; do
+        [ -d "$r" ] && echo "$(basename "$r"): type=$(cat "$r/type" 2>/dev/null) soft=$(cat "$r/soft" 2>/dev/null) hard=$(cat "$r/hard" 2>/dev/null)"
+    done
     [ ! -e /usr/share/udhcpc/default.script ] || echo 'udhcpc default.script present'
     ps 2>/dev/null | grep -E 'wpa_supplicant|udhcpc|hostapd' | grep -v grep
     echo '--- startup chain (what runs and draws before slot)'

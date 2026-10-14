@@ -357,11 +357,14 @@ fn a_present_runs_what_it_can_afford_rather_than_the_whole_ceiling() {
         per >= 1.0,
         "{per:.1} frames a present is less than one, so a present ran nothing"
     );
+    // A 5 ms core cannot reach the ceiling in one refresh, so a present spans two
+    // (33.3 ms, ceiling doubled): the budget, not that ceiling, must end it.
     assert!(
-        per <= 4.0,
-        "{per:.1} frames a present at 5 ms each is {:.0} ms of a 16.67 ms present: the budget \
-         never stopped it and the ceiling of {FAST_STEPS_MAX} did",
-        per * 5.0
+        per <= 6.0,
+        "{per:.1} frames a present at 5 ms each is {:.0} ms of a two-refresh 33.3 ms present: \
+         the budget never stopped it and the ceiling of {} did",
+        per * 5.0,
+        FAST_STEPS_MAX * 2
     );
 }
 

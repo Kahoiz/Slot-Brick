@@ -3,7 +3,7 @@ use slot_ui::{
     cart_face, clean_label, foot_y, gb_label_panel, gb_silhouette, label_colour, label_panel,
     label_text, rest_y, seated_box, shell_for, silhouette, Finish, GbShell, CART_H, CART_W,
     GB_CART_H, GB_CART_W, GB_LABEL_H, GB_LABEL_W, GB_LABEL_X, GB_LABEL_Y, LABEL_H, LABEL_W,
-    LABEL_X, LABEL_Y, MOUTH_H, OUT_H, PLATE_H,
+    LABEL_X, LABEL_Y, MOUTH_H, NES_CART_H, NES_CART_W, OUT_H, PLATE_H,
 };
 use tempfile::TempDir;
 
@@ -472,11 +472,37 @@ fn a_game_boy_cart_face_is_drawn_at_the_game_boy_size() {
 }
 
 #[test]
+fn a_nes_cart_is_drawn_at_its_own_size_in_grey_with_a_famicom_one_coloured() {
+    let d = tmp_root();
+    std::fs::create_dir(d.path().join("Games/NES")).unwrap();
+    let mut rom = b"NES\x1a".to_vec();
+    rom.resize(0x4010, 0);
+    std::fs::write(d.path().join("Games/NES/Zelda (USA).nes"), &rom).unwrap();
+    std::fs::write(d.path().join("Games/NES/Zelda (Japan).nes"), &rom).unwrap();
+    let carts = scan(d.path()).unwrap();
+    let face = |stem: &str| cart_face(carts.iter().find(|c| c.stem == stem).unwrap());
+    let (usa, japan) = (face("Zelda (USA)"), face("Zelda (Japan)"));
+    assert_eq!((usa.w, usa.h), (NES_CART_W, NES_CART_H));
+    // Below the grip, beside the label: bare plastic.
+    let px = |f: &slot_ui::CartFace| {
+        let i = ((f.h * 6 / 10 * f.w + f.w / 25) * 4) as usize;
+        [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2], f.rgba[i + 3]]
+    };
+    let (grey, coloured) = (px(&usa), px(&japan));
+    assert_eq!(grey[3], 255, "the side of the cart is see-through");
+    assert!(grey[0].abs_diff(grey[2]) < 16, "an NES cart is not grey: {grey:?}");
+    assert_ne!(grey, coloured, "the Famicom release wears NES grey");
+    let corner = (0..4).map(|c| usa.rgba[c]).collect::<Vec<_>>();
+    assert_eq!(corner[3], 0, "the rounded corner is filled");
+}
+
+#[test]
 fn every_cartridge_is_centred_on_the_row_and_clears_both_the_plate_and_the_slot() {
     let lip = OUT_H as f32 - MOUTH_H;
     for (name, h, span) in [
         ("the GBA cart", CART_H, OUT_H as f32),
         ("the Game Boy pak", GB_CART_H, lip),
+        ("the NES cart", NES_CART_H, lip),
     ] {
         let (top, foot) = (rest_y(h as f32), foot_y(h as f32));
         assert_eq!(
@@ -757,9 +783,11 @@ fn clear_gba(d: &TempDir) -> slot_ui::CartFace {
     rom[0xac..0xb0].copy_from_slice(b"U3IE");
     std::fs::write(d.path().join("Games/GBA/Boktai.gba"), rom).expect("write rom");
     let carts = scan(d.path()).unwrap();
-    let cart = carts.iter().find(|c| c.stem == "Boktai").expect("scanned");
-    assert_eq!(shell_for(cart).finish, Finish::Translucent);
-    cart_face(cart)
+    let mut cart = carts.into_iter().find(|c| c.stem == "Boktai").expect("scanned");
+    // The scan reads no headers; the shelf reads it before drawing.
+    cart.read_header();
+    assert_eq!(shell_for(&cart).finish, Finish::Translucent);
+    cart_face(&cart)
 }
 
 fn bevel() -> u32 {

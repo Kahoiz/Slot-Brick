@@ -17,6 +17,7 @@ slot-input = { path = "../slot-input" }
 slot-power = { path = "../slot-power" }
 slot-retro = { path = "../slot-retro" }
 slot-store = { path = "../slot-store" }
+slot-cheevos = { path = "../slot-cheevos" }
 slot-ui = { path = "../slot-ui" }
 winit = { workspace = true, optional = true }
 cpal = { workspace = true, optional = true }
@@ -25,6 +26,8 @@ libloading = { workspace = true }
 libc = { workspace = true }
 lz4_flex = { workspace = true }
 png = { workspace = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [dev-dependencies]
 slot-gfx = { path = "../slot-gfx", default-features = false, features = ["test-support"] }

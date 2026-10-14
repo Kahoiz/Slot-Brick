@@ -25,11 +25,13 @@ impl Cart {
                     self.code = code;
                 }
             }
-            _ => {
+            Platform::Gb | Platform::Gbc => {
                 if let Some(title) = crate::gb::title(&self.rom) {
                     self.title = title;
                 }
             }
+            // An iNES header names no game: the file name is the title.
+            Platform::Nes => {}
         }
     }
 }

@@ -9,7 +9,7 @@ use slot_input::{Action, Btn};
 use slot_store::{read_slot_state, write_slot_state, Shader, SlotState};
 use slot_ui::{
     edge, Draw, Icon, QuickMenuFaces, QuickRow, QuickValue, TexId, MENU_PAD, OUT_W, QUICK_EDGE,
-    QUICK_PITCH, QUICK_TOP,
+    QUICK_TOP,
 };
 use tempfile::TempDir;
 
@@ -491,10 +491,24 @@ fn the_legend_says_change_on_a_value_row_and_open_on_a_row_that_opens() {
     for row in QuickRow::MAIN {
         assert_eq!(a.quick_menu(), Some(row));
         let out = frame(&a);
+        // Cart Art and RetroAchievements are greyed out with no Wi-Fi, as here: only BACK.
+        let usable = !matches!(row, QuickRow::CartArt | QuickRow::Achievements);
         assert!(drawn(&out, 400), "no B BACK on {row:?}");
         assert_eq!(drawn(&out, 401), !row.opens(), "CHANGE on {row:?}");
-        assert_eq!(drawn(&out, 402), row.opens(), "OPEN on {row:?}");
+        assert_eq!(drawn(&out, 402), row.opens() && usable, "OPEN on {row:?}");
         press(&mut a, Btn::Down);
+    }
+}
+
+#[cfg(feature="brick")]
+#[test]
+fn cart_art_and_retroachievements_do_nothing_while_wifi_is_off() {
+    for row in [QuickRow::CartArt, QuickRow::Achievements] {
+        let (_d, mut a, _) = on_carousel();
+        open_at(&mut a, row);
+        press(&mut a, Btn::A);
+        assert!(!a.overlay_open(), "{row:?} opened its overlay");
+        assert_eq!(a.quick_menu(), Some(row));
     }
 }
 
@@ -548,10 +562,11 @@ fn the_bar_runs_edge_to_edge_behind_the_selected_row() {
                 _ => None,
             })
             .collect();
-        let top = QUICK_TOP + QUICK_PITCH * row.position() as f32;
+        let pitch = slot_ui::quick_pitch(QuickRow::MAIN.len());
+        let top = QUICK_TOP + pitch * row.position() as f32;
         assert_eq!(
             bars,
-            vec![[0.0, top + 4.0, OUT_W as f32, QUICK_PITCH - 8.0]],
+            vec![[0.0, top + 4.0, OUT_W as f32, pitch - 8.0]],
             "{row:?}"
         );
         press(&mut a, Btn::Down);
@@ -629,7 +644,7 @@ fn wifi_keeps_navigation_inside_overlay_and_b_returns_to_its_row() {
     // Status may still be running. B first cancels it, then closes the overlay.
     for i in 0..100 {
         a.tick_ms(5000+i*10);press(&mut a,Btn::B);press(&mut a,Btn::Down);
-        if a.quick_menu()==Some(QuickRow::DateTime){return}
+        if a.quick_menu()==Some(QuickRow::CartArt){return}
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     panic!("Wi-Fi overlay did not return to settings");

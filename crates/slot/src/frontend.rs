@@ -68,6 +68,7 @@ pub struct Frontend {
     quick_clock: QuickClock,
     #[cfg(feature = "brick")]
     wifi_tex: Option<TexId>,
+    banner_tex: Option<TexId>,
     #[cfg(feature = "brick")]
     auto_sleep: bool,
     #[cfg(feature = "brick")]
@@ -157,6 +158,7 @@ impl Frontend {
             quick_clock: QuickClock::default(),
             #[cfg(feature = "brick")]
             wifi_tex: None,
+            banner_tex: None,
             #[cfg(feature = "brick")]
             auto_sleep: !platform_root_has(&session_root, "DISABLE_AUTO_SLEEP"),
             #[cfg(feature = "brick")]
@@ -265,14 +267,14 @@ impl Frontend {
             carets,
             legend,
         });
-        let sockets = slot_store::Core::ALL
+        let sockets = slot_store::Core::PICKER
             .iter()
             .map(|c| {
                 let f = socket_face(*c);
                 compositor.create_texture(f.w, f.h, &f.rgba)
             })
             .collect();
-        let chips = slot_store::Core::ALL
+        let chips = slot_store::Core::PICKER
             .iter()
             .map(|c| {
                 let f = chip_face(Some(*c));
@@ -337,6 +339,9 @@ impl Frontend {
         let rounded = gb_cart_shadow(GbShell::Rounded);
         let rounded = compositor.create_texture(rounded.w, rounded.h, &rounded.rgba);
         self.session.app_mut().set_gb_cart_shadows(notched, rounded);
+        let nes = slot_ui::nes_cart_shadow();
+        let nes = compositor.create_texture(nes.w, nes.h, &nes.rgba);
+        self.session.app_mut().set_nes_cart_shadow(nes);
         let bolt = icon_face(Icon::Charging, BOLT_PX, HUD_INK);
         let bolt_id = compositor.create_texture(bolt.w, bolt.h, &bolt.rgba);
         self.session.app_mut().set_bolt_face(bolt_id);
@@ -392,6 +397,7 @@ impl Frontend {
     #[cfg(feature = "brick")]
     pub fn needs_render(&self)->bool {
         if self.app().wifi.as_ref().map(|w|w.dirty).unwrap_or(false) {return true}
+        if self.app().banner_active() {return true}
         if self.render_effects()!=self.rendered_effects {return true}
         if self.rebuild.is_some() || !matches!(self.app().phase(),Phase::Shelf|Phase::QuickMenu{..}) || self.last_input.elapsed()<Duration::from_secs(2) || self.last_render.elapsed()>=Duration::from_secs(1) {return true}
         let mut probe=Vec::new();self.app().draw(&mut probe);
@@ -423,6 +429,8 @@ impl Frontend {
         compositor.set_screen_power(self.session.app().screen_power());
         compositor.set_frame_lift(self.session.app().frame_lift());
         compositor.set_frame_split(self.session.app().frame_split());
+        let (cw, ch) = self.session.app().canvas();
+        compositor.set_game_canvas(cw, ch);
         compositor.set_game_source_rect(self.session.app().source_rect());
         compositor.begin_frame();
         if self.draw_rebuild(compositor) {
@@ -440,6 +448,20 @@ impl Frontend {
                 let tex=match self.wifi_tex {Some(id)=>{compositor.update_texture(id,f.w,f.h,&f.rgba);id},None=>compositor.create_texture(f.w,f.h,&f.rgba)};
                 self.wifi_tex=Some(tex);wifi.face=Some(tex);wifi.dirty=false;
             }
+        }
+        if let Some((id, title, detail, badge)) = self.session.app().banner_to_render() {
+            let px = slot_ui::BADGE_PX;
+            let badge = badge.and_then(|p| slot_ui::cover(&p, px, px));
+            let f = slot_ui::banner_face(&title, &detail, badge.as_deref());
+            let tex = match self.banner_tex {
+                Some(t) => {
+                    compositor.update_texture(t, f.w, f.h, &f.rgba);
+                    t
+                }
+                None => compositor.create_texture(f.w, f.h, &f.rgba),
+            };
+            self.banner_tex = Some(tex);
+            self.session.app_mut().set_banner_face(id, tex);
         }
         sync_clock(self.session.app_mut(), compositor, &mut self.clocks);
         sync_about(self.session.app_mut(), compositor, &mut self.about);

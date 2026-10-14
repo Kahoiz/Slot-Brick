@@ -80,7 +80,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
     #[cfg(not(feature="brick"))]
     assert_eq!(QuickRow::MAIN.map(QuickRow::label), ["Screen", "Gameplay", "Date & Time", "About"]);
     #[cfg(feature="brick")]
-    assert_eq!(QuickRow::MAIN.map(QuickRow::label), ["Screen", "Gameplay", "LEDs", "Wi-Fi", "Date & Time", "About"]);
+    assert_eq!(QuickRow::MAIN.map(QuickRow::label), ["Screen", "Gameplay", "LEDs", "Wi-Fi", "Cart Art", "RetroAchievements", "Date & Time", "About"]);
     assert_eq!(
         QuickRow::SCREEN.map(QuickRow::label),
         [
@@ -110,7 +110,9 @@ fn the_rows_run_in_the_order_the_user_chose() {
             QuickRow::About,
             QuickRow::Game,
             QuickRow::Lights,
-            QuickRow::Wifi
+            QuickRow::Wifi,
+            QuickRow::CartArt,
+            QuickRow::Achievements
         ]
     );
     for page in [
