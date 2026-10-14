@@ -113,6 +113,7 @@ fn a_bad_wordmark_or_no_logo_to_measure_never_touches_the_partition() {
 }
 
 #[test]
+#[ignore = "upstream Slot's card/System/bootlogo.bmp is not part of the Brick port"]
 fn the_shipped_wordmark_fits_every_panel_baseos_supports() {
     let card = std::fs::read(concat!(
         env!("CARGO_MANIFEST_DIR"),

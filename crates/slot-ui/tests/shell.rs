@@ -225,8 +225,10 @@ fn an_unlisted_pak_keeps_its_flags_plastic() {
 fn the_label_does_not_cover_the_whole_shell() {
     let d = tmp_root();
     write_rom_with_code(&d, "Drill Dozer.gba", "DRILL DOZER", "V49E");
-    let cart = &scan(d.path()).unwrap()[0];
-    let f = cart_face(cart);
+    // The scan reads no headers; the shelf reads it before drawing.
+    let mut cart = scan(d.path()).unwrap().remove(0);
+    cart.read_header();
+    let f = cart_face(&cart);
     let px = |x: u32, y: u32| {
         let i = ((y * f.w + x) * 4) as usize;
         [f.rgba[i], f.rgba[i + 1], f.rgba[i + 2]]

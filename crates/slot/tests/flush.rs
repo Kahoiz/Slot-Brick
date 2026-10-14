@@ -76,6 +76,7 @@ fn a_power_tap_dozes_and_a_second_one_wakes() {
 }
 
 #[test]
+#[cfg_attr(feature = "brick", ignore = "the Brick lists Shut Down first; see the brick test below")]
 fn opening_the_menu_flushes_and_the_choice_powers_off() {
     let d = tmp_root_with_carts(&["Emerald"]);
     let mut a = app_playing_in(d.path(), "Emerald");
@@ -101,6 +102,18 @@ fn opening_the_menu_flushes_and_the_choice_powers_off() {
         Some("Emerald".into()),
         "power off is not an eject"
     );
+}
+
+#[test]
+#[cfg(feature = "brick")]
+fn on_the_brick_shut_down_is_the_first_row() {
+    let d = tmp_root_with_carts(&["Emerald"]);
+    let mut a = app_playing_in(d.path(), "Emerald");
+    a.apply(Action::PowerHold);
+    assert!(!a.powering_off());
+    a.apply(Action::GbaDown(Btn::A));
+    assert!(a.powering_off(), "Shut Down Device is the first row");
+    assert_eq!(read_slot_state(d.path()).cart, Some("Emerald".into()), "power off is not an eject");
 }
 
 #[test]

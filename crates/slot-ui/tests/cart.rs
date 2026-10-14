@@ -757,9 +757,11 @@ fn clear_gba(d: &TempDir) -> slot_ui::CartFace {
     rom[0xac..0xb0].copy_from_slice(b"U3IE");
     std::fs::write(d.path().join("Games/GBA/Boktai.gba"), rom).expect("write rom");
     let carts = scan(d.path()).unwrap();
-    let cart = carts.iter().find(|c| c.stem == "Boktai").expect("scanned");
-    assert_eq!(shell_for(cart).finish, Finish::Translucent);
-    cart_face(cart)
+    let mut cart = carts.into_iter().find(|c| c.stem == "Boktai").expect("scanned");
+    // The scan reads no headers; the shelf reads it before drawing.
+    cart.read_header();
+    assert_eq!(shell_for(&cart).finish, Finish::Translucent);
+    cart_face(&cart)
 }
 
 fn bevel() -> u32 {
