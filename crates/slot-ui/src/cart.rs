@@ -16,9 +16,9 @@ pub const GB_CART_W: u32 = 312;
 
 pub const GB_CART_H: u32 = (GB_CART_W * GB_SEATED_H + SEATED_W / 2) / SEATED_W;
 
-/// About a Game Boy pak's size on the shelf, so the carousel keeps its rhythm; a little
-/// narrower, as the NES cart is the taller shape and the row has room for ~340px.
-pub const NES_CART_W: u32 = 300;
+/// About a Game Boy pak's size on the shelf, so the carousel keeps its rhythm; narrower,
+/// as the NES cart is the taller shape and the row has room for ~340px.
+pub const NES_CART_W: u32 = 276;
 
 pub const NES_CART_H: u32 = (NES_CART_W * NES_SEATED_H + SEATED_W / 2) / SEATED_W;
 
@@ -50,13 +50,14 @@ pub const GB_LABEL_Y: u32 = gb_label_panel(GB_CART_W, GB_CART_H).1;
 pub const GB_LABEL_W: u32 = gb_label_panel(GB_CART_W, GB_CART_H).2 - GB_LABEL_X;
 pub const GB_LABEL_H: u32 = gb_label_panel(GB_CART_W, GB_CART_H).3 - GB_LABEL_Y;
 
-/// The recess under the grip grooves (nes_cart_detail.svg: 26.2..213.8 of 240, 84.2..241.8 of 266).
+/// The portrait recess right of the grip, open to the top edge (nes_cart_detail.svg:
+/// 93.2..207.8 of 240, 1..193.8 of 288).
 pub const fn nes_label_panel(w: u32, h: u32) -> (u32, u32, u32, u32) {
     (
-        (w * 109 + 500) / 1000,
-        (h * 317 + 500) / 1000,
-        (w * 891 + 500) / 1000,
-        (h * 909 + 500) / 1000,
+        (w * 388 + 500) / 1000,
+        (h * 4 + 500) / 1000,
+        (w * 866 + 500) / 1000,
+        (h * 673 + 500) / 1000,
     )
 }
 
@@ -180,11 +181,11 @@ fn spec(shape: Shape) -> Spec {
             max_h: (NES_LABEL_H - 2 * PAD) as f32,
             rim: NES_RIM,
             board: Board {
-                x: (0.08, 0.92),
-                top: 0.32,
-                pins: (0.1, 0.9),
-                contacts_from: 0.92,
-                traces_from: 0.85,
+                x: (0.04, 0.96),
+                top: 0.04,
+                pins: (0.06, 0.94),
+                contacts_from: 0.93,
+                traces_from: 0.86,
             },
         },
     }
@@ -193,8 +194,8 @@ fn spec(shape: Shape) -> Spec {
 pub const SEATED_W: u32 = 240;
 const SEATED_H: u32 = 141;
 const GB_SEATED_H: u32 = 259;
-/// A NES cart's face is 120 x 133 mm.
-const NES_SEATED_H: u32 = 266;
+/// A NES cart's face, connector foot included, is about 5:6.
+const NES_SEATED_H: u32 = 288;
 
 pub fn seated_box(platform: Platform) -> (u32, u32) {
     match platform {
@@ -460,7 +461,8 @@ fn recess_label(s: &Spec, face: &mut CartFace, shell: &Shell) {
     let (lx, ly, lw, lh) = s.label;
     let (w, h) = (s.w, s.h);
     let bevel = (BEVEL * w + SEATED_W / 2) / SEATED_W;
-    let (x0, y0) = (lx - bevel, ly - bevel);
+    // A recess may run to the cart's edge (the NES label is open to the top).
+    let (x0, y0) = (lx.saturating_sub(bevel), ly.saturating_sub(bevel));
     let (x1, y1) = (lx + lw + bevel, ly + lh + bevel);
     let clear = shell.finish != Finish::Solid;
     let mut put = |x: u32, y: u32, upper: bool| {

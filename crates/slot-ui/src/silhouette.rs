@@ -57,7 +57,7 @@ pub(crate) fn nes_cart_depth() -> &'static [u8] {
     DEPTH.get_or_init(|| depth_map(nes_cart_mask(), NES_CART_W as usize, NES_CART_H as usize))
 }
 
-/// Grip grooves and the label recess; a NES cart has no lettering moulded in.
+/// The full-height grip, the label recess and its arrow; a NES cart has no lettering moulded in.
 pub(crate) fn nes_detail_mask() -> &'static Detail {
     static MASK: OnceLock<Detail> = OnceLock::new();
     MASK.get_or_init(|| {

@@ -6,9 +6,6 @@ use crate::rumble::Rumble;
 
 pub const GBA_W: u32 = 240;
 pub const GBA_H: u32 = 160;
-/// A NES frame's largest size; FCEUmm crops overscan inside it.
-pub const NES_W: u32 = 256;
-pub const NES_H: u32 = 240;
 
 #[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 pub struct ButtonMask(pub u16);

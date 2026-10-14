@@ -129,6 +129,12 @@ fn read_all(stream: impl Read, cap: u64) -> std::io::Result<Vec<u8>> {
     }
 }
 
+/// `send`'s error for a server it could not reach at all (no internet, wrong network), as
+/// opposed to one that answered badly: worth giving up a whole run over.
+pub fn unreachable(error: &str) -> bool {
+    error.starts_with("cannot look up ") || error.starts_with("cannot connect to ")
+}
+
 fn tls_error(e: &std::io::Error) -> String {
     let text = e.to_string();
     let lower = text.to_lowercase();
@@ -224,6 +230,14 @@ mod tests {
             let req = Request { tls: false, server, method: "GET", path, form: None, limit: 1 };
             assert_eq!(send(&req).err().as_deref(), Some("bad request address"), "{path:?}");
         }
+    }
+
+    #[test]
+    fn only_an_unreachable_server_counts_as_unreachable() {
+        let req = |server| Request { tls: false, server, method: "GET", path: "/", form: None, limit: 1 };
+        assert!(unreachable(&send(&req("127.0.0.1:1")).err().unwrap()));
+        assert!(unreachable(&send(&req("no-such-host.invalid:80")).err().unwrap()));
+        assert!(!unreachable("server said 403") && !unreachable("reply too large"));
     }
 
     #[test]
